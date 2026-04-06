@@ -1,101 +1,102 @@
-# GlebasGEO - Validador Geoespacial
+# 🌍 GlebasGEO - Validador Geoespacial SICOR/CAR
 
-Sistema web de validação de glebas georreferenciadas com mapa interativo, construído com **React + Vite + Leaflet**.
+Sistema web moderno e responsivo para validação de glebas georreferenciadas. Integra visualização em mapa interativo, importação de dados geoespaciais (Excel, GeoJSON) e validação de coordenadas conforme normas SICOR e CAR.
 
 ---
 
-## Instalação e Execução
+## ✨ Características
+
+- 🗺️ **Mapa Interativo** - Visualização em tempo real com Leaflet.js
+- 📊 **Dashboard de Validação** - Resumo com estatísticas de glebas (válidas, inválidas, pendentes)
+- 📥 **Importação de Dados** - Suporta Excel (.xlsx), CSV e GeoJSON
+- ✅ **Validação Geoespacial** - Verificação de coordenadas, geometrias e conformidade SICOR
+- 🔍 **Busca e Filtros** - Filtrar glebas por municipio, estado de validação, etc
+- 📋 **Detalhes da Gleba** - Painel lateral com informações técnicas e geoespaciais
+- 📤 **Exportação de Relatórios** - Gerar relatórios de validação
+- 🌙 **Dark Theme** - Interface moderna com tema escuro e design responsivo
+
+---
+
+## 🚀 Quick Start
+
+### Pré-requisitos
+- **Node.js** 16+ 
+- **npm** ou **yarn**
+
+### Instalação
 
 ```bash
-# 1. Entre na pasta do projeto
-cd glebas-validator
+# Clone o repositório
+git clone https://github.com/Rodrigo-dev7/glebasGeo.git
+cd glebasGeo
 
-# 2. Instale as dependências
+# Instale as dependências
 npm install
 
-# 3. Inicie o servidor de desenvolvimento
+# Inicie o servidor de desenvolvimento
 npm run dev
-
-# 4. Acesse em: http://localhost:5173
 ```
 
-Para produção:
+Acesse em `http://localhost:5173`
+
+### Build para Produção
 
 ```bash
-npm run build
-npm run preview
+npm run build    # Gera pasta /dist
+npm run preview  # Visualiza build local
 ```
 
 ---
 
-## Estrutura do Projeto
+## 📁 Estrutura do Projeto
 
-```text
-glebas-validator/
-├── index.html
-├── vite.config.js
-├── package.json
-└── src/
-    ├── main.jsx
-    ├── App.jsx
-    ├── index.css
-    ├── data/
-    │   └── glebas.json
-    ├── services/
-    │   ├── validationService.js
-    │   ├── excelGeoService.js
-    │   ├── datasetImportService.js
-    │   ├── coordinateValidationService.js
-    │   ├── sicorGlebaValidationService.js
-    │   └── reportService.js
-    ├── hooks/
-    │   └── useGlebas.js
-    └── components/
-        ├── MapView.jsx
-        ├── Sidebar.jsx
-        ├── GlebaPanel.jsx
-        ├── CoordinateValidationPanel.jsx
-        ├── FilterBar.jsx
-        └── Legend.jsx
+```
+src/
+├── components/                         # Componentes React
+│   ├── Sidebar.jsx                     # Painel lateral com resumo
+│   ├── MapView.jsx                     # Mapa Leaflet interativo
+│   ├── FilterBar.jsx                   # Barra de filtros
+│   ├── GlebaAccordionList.jsx          # Lista accordion de glebas
+│   ├── GlebaDetailModal.jsx            # Modal com detalhes
+│   ├── GlebaPanel.jsx                  # Painel de gleba selecionada
+│   ├── CoordinateValidationPanel.jsx   # Importação e validação
+│   └── Legend.jsx                      # Legenda do mapa
+│
+├── hooks/                              # Custom React hooks
+│   └── useGlebas.js                    # Hook central de estado
+│
+├── services/                           # Serviços e lógica de negócio
+│   ├── validationService.js            # Validação de geometrias
+│   ├── coordinateValidationService.js  # Validação de coordenadas
+│   ├── sicorGlebaValidationService.js  # Regras SICOR específicas
+│   ├── excelGeoService.js              # Leitura de Excel/GeoJSON
+│   ├── datasetImportService.js         # Pipeline de importação
+│   ├── featureGeometryService.js       # Processamento geométrico
+│   ├── glebaEnrichmentService.js       # Enriquecimento de dados
+│   ├── adminBoundaryService.js         # Limites administrativos
+│   └── reportService.js                # Geração de relatórios
+│
+└── data/                               # Dados estáticos
+    ├── glebas.json                     # Dataset inicial
+    └── municipios-uf.json              # Dados municipais
 ```
 
 ---
 
-## Funcionalidades
+## 🛠️ Tecnologias Utilizadas
 
-### Mapa interativo
-
-- Exibição de glebas em mapa Leaflet
-- Polígonos coloridos por status
-- Visualização do polígono mesmo quando houver erro
-- Destaque de vértices corretos e com erro
-- Popup com resumo da gleba e das coordenadas
-
-### Validação de coordenadas
-
-- Importação de arquivos `.xls`, `.xlsx`, `.geojson` e `.json`
-- Validação por correspondência direta de ponto
-- Validação por inclusão em área
-- Destaque visual da gleba encontrada
-
-### Regras SICOR implementadas
-
-- `SICOR: A gleba informada nao corresponde a uma area valida.`
-- `SICOR: Gleba deve ser polígono fechado: o primeiro e o último ponto devem ser iguais.`
-
-### Ações da interface
-
-- `Selecionar Arquivo`
-- `Validar Gleba`
-- `Exportar Relatório`
-- `Limpar Dados`
+- **React 18** - UI Framework
+- **Vite** - Build tool ultrarrápido
+- **Leaflet.js** - Mapa interativo
+- **Turf.js** - Análise geoespacial
+- **CSS3** - Styling com dark theme
 
 ---
 
-## Observações
+## 👨‍💻 Autor
 
-- O projeto mantém a estrutura original e adiciona serviços específicos para importação, validação SICOR e exportação de relatório.
-- O parser de Excel é carregado sob demanda para reduzir o peso inicial da aplicação.
+**Rodrigo Dev** - [@Rodrigo-dev7](https://github.com/Rodrigo-dev7)
 
-- Para preenchimento automatico de Munic�pio e UF por base local, substitua src/data/municipios-uf.json por uma base GeoJSON com limites administrativos e propriedades como municipio/
-ome e uf/sigla_uf.
+---
+
+**GlebasGEO** © 2026 - Sistema de Validação Geoespacial SICOR/CAR
