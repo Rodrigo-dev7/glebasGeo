@@ -1,4 +1,4 @@
-# 🌍 GlebasGEO - Validador Geoespacial SICOR/CAR
+# 🌍 GlebasGEO - Validador Geoespacial de Glebas 
 
 
 Sistema web moderno e responsivo para validação de glebas georreferenciadas. Integra visualização em mapa interativo, importação de dados geoespaciais (Excel, GeoJSON) e validação de coordenadas conforme normas SICOR e CAR.
