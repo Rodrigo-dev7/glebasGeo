@@ -1,0 +1,221 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "GL-001",
+        "nome": "Fazenda São João",
+        "area": 141.3,
+        "proprietario": "João Alves da Silva",
+        "municipio": "Luziânia",
+        "uf": "GO",
+        "codigo_imovel": "GO-10700-0028347891",
+        "tipo_uso": "Pastagem",
+        "data_inscricao": "2019-04-12",
+        "situacao_cadastral": "Certificada",
+        "sobreposicao": false,
+        "analise_pendente": false
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-49.300, -16.640],
+          [-49.315, -16.641],
+          [-49.314, -16.648],
+          [-49.301, -16.649],
+          [-49.300, -16.640]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "GL-002",
+        "nome": "Sítio Boa Esperança",
+        "area": 70.8,
+        "proprietario": "Maria Conceição Ferreira",
+        "municipio": "Luziânia",
+        "uf": "GO",
+        "codigo_imovel": "GO-10700-0041256739",
+        "tipo_uso": "Lavoura Temporária",
+        "data_inscricao": "2020-11-03",
+        "situacao_cadastral": "Certificada",
+        "sobreposicao": false,
+        "analise_pendente": false
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-49.265, -16.640],
+          [-49.275, -16.641],
+          [-49.274, -16.646],
+          [-49.266, -16.646],
+          [-49.265, -16.640]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "GL-003",
+        "nome": "Lote Recanto Verde",
+        "area": 2.4,
+        "proprietario": "Carlos Eduardo Mota",
+        "municipio": "Luziânia",
+        "uf": "GO",
+        "codigo_imovel": "GO-10700-0099872341",
+        "tipo_uso": "Hortifruti",
+        "data_inscricao": "2023-06-17",
+        "situacao_cadastral": "Pendente",
+        "sobreposicao": false,
+        "analise_pendente": false
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-49.232, -16.640],
+          [-49.234, -16.640],
+          [-49.234, -16.642],
+          [-49.232, -16.642],
+          [-49.232, -16.640]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "GL-004",
+        "nome": "Fazenda Estrela do Sul",
+        "area": 113.6,
+        "proprietario": "Agropecuária Planalto Ltda.",
+        "municipio": "Novo Gama",
+        "uf": "GO",
+        "codigo_imovel": "GO-10750-0012874390",
+        "tipo_uso": "Pastagem",
+        "data_inscricao": "2018-09-22",
+        "situacao_cadastral": "Em análise",
+        "sobreposicao": true,
+        "analise_pendente": false
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-49.300, -16.655],
+          [-49.312, -16.656],
+          [-49.311, -16.663],
+          [-49.301, -16.663],
+          [-49.300, -16.655]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "GL-005",
+        "nome": "Gleba Cerrado Vivo",
+        "area": 70.1,
+        "proprietario": null,
+        "municipio": "Novo Gama",
+        "uf": "GO",
+        "codigo_imovel": null,
+        "tipo_uso": "Vegetação Nativa",
+        "data_inscricao": "2022-01-30",
+        "situacao_cadastral": "Irregular",
+        "sobreposicao": false,
+        "analise_pendente": false
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-49.260, -16.655],
+          [-49.270, -16.656],
+          [-49.269, -16.661],
+          [-49.261, -16.661],
+          [-49.260, -16.655]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "GL-006",
+        "nome": "Fazenda Primavera",
+        "area": 151.4,
+        "proprietario": "Roberto Damasceno Neto",
+        "municipio": "Valparaíso de Goiás",
+        "uf": "GO",
+        "codigo_imovel": "GO-10800-0034119820",
+        "tipo_uso": "Lavoura Permanente",
+        "data_inscricao": "2017-03-08",
+        "situacao_cadastral": "Certificada",
+        "sobreposicao": false,
+        "analise_pendente": false
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-49.222, -16.655],
+          [-49.238, -16.655],
+          [-49.237, -16.663],
+          [-49.223, -16.664],
+          [-49.222, -16.655]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "GL-007",
+        "nome": "Sítio Águas Claras",
+        "area": 47.2,
+        "proprietario": "Fernanda Lima Teixeira",
+        "municipio": "Cidade Ocidental",
+        "uf": "GO",
+        "codigo_imovel": "GO-10650-0057834210",
+        "tipo_uso": "Aquicultura",
+        "data_inscricao": "2021-08-14",
+        "situacao_cadastral": "Em análise",
+        "sobreposicao": false,
+        "analise_pendente": true
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-49.302, -16.675],
+          [-49.310, -16.675],
+          [-49.309, -16.680],
+          [-49.303, -16.680],
+          [-49.302, -16.675]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "GL-008",
+        "nome": "Fazenda Chapada Alta",
+        "area": 233.7,
+        "proprietario": "Grupo Agronegócios Horizonte S/A",
+        "municipio": "Cidade Ocidental",
+        "uf": "GO",
+        "codigo_imovel": "GO-10650-0081226430",
+        "tipo_uso": "Integração Lavoura-Pecuária",
+        "data_inscricao": "2016-12-01",
+        "situacao_cadastral": "Certificada",
+        "sobreposicao": false,
+        "analise_pendente": false
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-49.260, -16.675],
+          [-49.278, -16.676],
+          [-49.277, -16.686],
+          [-49.261, -16.687],
+          [-49.260, -16.675]
+        ]]
+      }
+    }
+  ]
+}
