@@ -1,16 +1,14 @@
-/**
- * Sidebar.jsx
- * Painel lateral esquerdo com resumo, importacao e detalhes da gleba selecionada.
- */
 import { useEffect, useRef, useState } from 'react'
 
 import GlebaPanel from './GlebaPanel'
 import CoordinateValidationPanel from './CoordinateValidationPanel'
 import GlebaAccordionList from './GlebaAccordionList'
 
-const MIN_SIDEBAR_WIDTH = 320
-const MAX_SIDEBAR_WIDTH = 680
-const DEFAULT_SIDEBAR_WIDTH = 380
+const MIN_SIDEBAR_WIDTH = 280
+const MAX_SIDEBAR_WIDTH = 520
+const DEFAULT_SIDEBAR_WIDTH = 320
+const SIDEBAR_WIDTH_STORAGE_KEY = 'glebasgeo:sidebar-width'
+const RESIZE_EDGE_HITBOX = 18
 
 function IconPanelLeft() {
   return (
@@ -46,10 +44,19 @@ export default function Sidebar({
   exportReport,
   sidebarCollapsed = false,
   onSidebarCollapsedChange,
+  isMobile = false,
+  isMobileOpen = false,
 }) {
   const sidebarRef = useRef(null)
   const isResizingRef = useRef(false)
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_SIDEBAR_WIDTH
+
+    const savedWidth = Number(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY))
+    if (!Number.isFinite(savedWidth)) return DEFAULT_SIDEBAR_WIDTH
+
+    return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, savedWidth))
+  })
 
   useEffect(() => {
     const handleMouseMove = (event) => {
@@ -78,109 +85,154 @@ export default function Sidebar({
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
+  }, [sidebarWidth])
+
   const handleResizeStart = (event) => {
+    if (isMobile || sidebarCollapsed) return
     event.preventDefault()
     isResizingRef.current = true
     document.body.classList.add('is-resizing-sidebar')
   }
 
+  const handleResizeReset = () => {
+    setSidebarWidth(DEFAULT_SIDEBAR_WIDTH)
+  }
+
+  const handleSidebarMouseDown = (event) => {
+    if (isMobile || sidebarCollapsed || !sidebarRef.current) return
+
+    const bounds = sidebarRef.current.getBoundingClientRect()
+    const distanceFromRight = bounds.right - event.clientX
+
+    if (distanceFromRight < 0 || distanceFromRight > RESIZE_EDGE_HITBOX) {
+      return
+    }
+
+    handleResizeStart(event)
+  }
+
+  const sidebarContentId = 'sidebar-content'
+
   return (
     <aside
       ref={sidebarRef}
       className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}
+      data-collapsed={sidebarCollapsed ? 'true' : 'false'}
+      data-mobile={isMobile ? 'true' : 'false'}
+      data-open={isMobileOpen ? 'true' : 'false'}
       style={sidebarCollapsed ? undefined : { width: `${sidebarWidth}px` }}
       aria-hidden={sidebarCollapsed}
+      onMouseDown={handleSidebarMouseDown}
     >
-        <div className="sidebar-scroll">
-          <div className="sidebar-header">
-            <div className="sidebar-header-brand">
-              <div className="sidebar-logo-icon">Geo</div>
-              <div className="sidebar-logo-text">
-                <div className="sidebar-logo-name">GlebasGEO</div>
-                <div className="sidebar-logo-sub">Validador geoespacial · SICOR</div>
+      <div id={sidebarContentId} className="sidebar-scroll">
+        <div className="sidebar-header">
+          <div className="sidebar-header-brand">
+            <div className="sidebar-logo-icon">Geo</div>
+            <div className="sidebar-logo-text">
+              <div className="sidebar-logo-name">GlebasGEO</div>
+              <div className="sidebar-logo-meta">
+                <div className="sidebar-logo-sub">Validacao tecnica integrada</div>
               </div>
             </div>
-            <div className="sidebar-header-actions">
-              <div className="sidebar-badge">v1.0</div>
-              <button
-                type="button"
-                className="sidebar-collapse-btn"
-                onClick={() => onSidebarCollapsedChange?.(true)}
-                aria-label="Ocultar painel lateral"
-                title="Ocultar painel lateral"
-              >
-                <IconPanelLeft />
-              </button>
+          </div>
+
+          <div className="sidebar-header-actions">
+            <button
+              type="button"
+              className="sidebar-collapse-btn"
+              onClick={() => onSidebarCollapsedChange?.(true)}
+              aria-label="Ocultar painel lateral"
+              aria-controls={sidebarContentId}
+              aria-expanded={!sidebarCollapsed}
+              title="Ocultar painel lateral"
+            >
+              <IconPanelLeft />
+            </button>
+          </div>
+        </div>
+
+        <div className="sidebar-stats">
+          <div className="stats-head">
+            <div>
+              <div className="stats-kicker">Resumo operacional</div>
+              <div className="stats-title">Panorama da base</div>
             </div>
           </div>
 
-          <div className="sidebar-stats">
-            <div className="stats-title">Resumo da validacao</div>
-            <div className="stats-grid">
-              <StatCard value={stats.total} label="Total" variant="total" shortLabel="Base" />
-              <StatCard value={stats.validas} label="Validas" variant="valida" shortLabel="OK" />
-              <StatCard value={stats.invalidas} label="Invalidas" variant="invalida" shortLabel="ER" />
-              <StatCard value={stats.pendentes} label="Pendentes" variant="pendente" shortLabel="AV" />
-            </div>
-            <div className="stats-area">
-              <span className="stats-area-label">Area total cadastrada:</span>
-              <span className="stats-area-value">{stats.areaTotal} ha</span>
-            </div>
+          <div className="stats-grid">
+            <StatCard value={stats.total} label="Total" variant="total" shortLabel="Base" />
+            <StatCard value={stats.validas} label="Validas" variant="valida" shortLabel="OK" />
+            <StatCard value={stats.invalidas} label="Invalidas" variant="invalida" shortLabel="ER" />
+            <StatCard value={stats.pendentes} label="Pendentes" variant="pendente" shortLabel="AV" />
           </div>
 
-          <div className="sidebar-divider" />
-
-          <div className="sidebar-tools">
-            <CoordinateValidationPanel
-              importedDataset={importedDataset}
-              importError={importError}
-              isImporting={isImporting}
-              importDataset={importDataset}
-              clearImportedDataset={clearImportedDataset}
-              validationResult={validationResult}
-              validateCoordinate={validateCoordinate}
-              exportReport={exportReport}
-            />
+          <div className="stats-area">
+            <span className="stats-area-label">Area total cadastrada</span>
+            <span className="stats-area-value">{stats.areaTotal} ha</span>
           </div>
+        </div>
 
-          <div className="sidebar-divider" />
+        <div className="sidebar-divider" />
 
-          <div className="sidebar-panel-wrap">
+        <div className="sidebar-tools">
+          <CoordinateValidationPanel
+            importedDataset={importedDataset}
+            importError={importError}
+            isImporting={isImporting}
+            importDataset={importDataset}
+            clearImportedDataset={clearImportedDataset}
+            validationResult={validationResult}
+            validateCoordinate={validateCoordinate}
+            exportReport={exportReport}
+          />
+        </div>
+
+        <div className="sidebar-divider" />
+
+        <div className="sidebar-panel-wrap">
+          <div className="sidebar-surface">
             <GlebaAccordionList
               glebas={glebas?.features || []}
               selectedGleba={selectedGleba}
               setSelectedGleba={setSelectedGleba}
             />
+          </div>
 
-            {selectedGleba ? (
-              <div className="sidebar-selected-panel">
-                <div className="sidebar-section-title">
-                  Gleba em destaque
-                </div>
-                <GlebaPanel
-                  gleba={selectedGleba}
-                  onClose={() => {
-                    setSelectedGleba(null)
-                  }}
-                />
+          {selectedGleba ? (
+            <div className="sidebar-surface sidebar-surface--selected">
+              <div className="sidebar-section-title">
+                Gleba em destaque
               </div>
-            ) : (
+              <GlebaPanel
+                gleba={selectedGleba}
+                onClose={() => {
+                  setSelectedGleba(null)
+                }}
+              />
+            </div>
+          ) : (
+            <div className="sidebar-surface sidebar-surface--hint">
               <div className="sidebar-hint">
                 <div className="hint-icon">Mapa</div>
                 <p className="hint-text">
                   Selecione ou expanda uma gleba para visualizar os detalhes tecnicos nesta lateral.
                 </p>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
+      </div>
 
       <button
         type="button"
         className="sidebar-resize-handle"
         onMouseDown={handleResizeStart}
+        onDoubleClick={handleResizeReset}
         aria-label="Redimensionar barra lateral"
-        title="Arraste para redimensionar"
+        title="Arraste para redimensionar. Clique duplo para restaurar."
         disabled={sidebarCollapsed}
       />
     </aside>

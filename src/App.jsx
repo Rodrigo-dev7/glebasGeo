@@ -1,8 +1,4 @@
-/**
- * App.jsx
- * Componente raiz da aplicação GlebasGEO.
- */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useGlebas } from './hooks/useGlebas'
 import Sidebar from './components/Sidebar'
 import MapView from './components/MapView'
@@ -18,6 +14,8 @@ function IconChevronRight() {
 
 export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [isMobileSidebar, setIsMobileSidebar] = useState(false)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const {
     glebas,
     allGlebas,
@@ -41,15 +39,60 @@ export default function App() {
     updateSelectedGlebaCoordinates,
   } = useGlebas()
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 768px)')
+
+    const syncSidebarMode = (event) => {
+      const nextIsMobile = event.matches
+      setIsMobileSidebar(nextIsMobile)
+      if (!nextIsMobile) {
+        setIsMobileSidebarOpen(false)
+      }
+    }
+
+    syncSidebarMode(mediaQuery)
+
+    const listener = (event) => syncSidebarMode(event)
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', listener)
+      return () => mediaQuery.removeEventListener('change', listener)
+    }
+
+    mediaQuery.addListener(listener)
+    return () => mediaQuery.removeListener(listener)
+  }, [])
+
+  const isSidebarVisible = isMobileSidebar ? isMobileSidebarOpen : !sidebarCollapsed
+
+  const handleSidebarVisibilityChange = (nextVisible) => {
+    if (isMobileSidebar) {
+      setIsMobileSidebarOpen(Boolean(nextVisible))
+      return
+    }
+
+    setSidebarCollapsed(!nextVisible)
+  }
+
+  const handleOpenSidebar = () => {
+    handleSidebarVisibilityChange(true)
+  }
+
+  const handleCloseSidebar = () => {
+    handleSidebarVisibilityChange(false)
+  }
+
   return (
     <div className="app">
-      <header className="topbar topbar--centered">
-        <div className="topbar-title">
-          Sistema de Validação de Glebas - SICOR / CAR
-        </div>
-      </header>
+      <div className={`app-body${!isSidebarVisible ? ' app-body--sidebar-collapsed' : ''}`}>
+        {isMobileSidebar && isMobileSidebarOpen && (
+          <button
+            type="button"
+            className="sidebar-mobile-backdrop"
+            aria-label="Fechar painel lateral"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+        )}
 
-      <div className={`app-body${sidebarCollapsed ? ' app-body--sidebar-collapsed' : ''}`}>
         <Sidebar
           stats={stats}
           glebas={glebas}
@@ -63,8 +106,17 @@ export default function App() {
           validationResult={validationResult}
           validateCoordinate={validateCoordinate}
           exportReport={exportReport}
-          sidebarCollapsed={sidebarCollapsed}
-          onSidebarCollapsedChange={setSidebarCollapsed}
+          sidebarCollapsed={!isSidebarVisible}
+          onSidebarCollapsedChange={(nextCollapsed) => {
+            if (typeof nextCollapsed === 'boolean') {
+              handleSidebarVisibilityChange(!nextCollapsed)
+              return
+            }
+
+            handleCloseSidebar()
+          }}
+          isMobile={isMobileSidebar}
+          isMobileOpen={isMobileSidebarOpen}
         />
 
         <main className="map-area">
@@ -82,17 +134,29 @@ export default function App() {
             visibleFeatureIds={visibleFeatureIds}
             viewportRequest={mapViewportRequest}
             updateSelectedGlebaCoordinates={updateSelectedGlebaCoordinates}
-            layoutRevision={sidebarCollapsed}
+            layoutRevision={isSidebarVisible}
           />
         </main>
 
-        {sidebarCollapsed && (
+        {!isMobileSidebar && sidebarCollapsed && (
           <button
             type="button"
             className="sidebar-expand-fab"
-            onClick={() => setSidebarCollapsed(false)}
+            onClick={handleOpenSidebar}
             aria-label="Mostrar painel lateral"
             title="Mostrar painel lateral"
+          >
+            <IconChevronRight />
+          </button>
+        )}
+
+        {isMobileSidebar && !isMobileSidebarOpen && (
+          <button
+            type="button"
+            className="sidebar-mobile-trigger"
+            onClick={handleOpenSidebar}
+            aria-label="Abrir painel lateral"
+            title="Abrir painel lateral"
           >
             <IconChevronRight />
           </button>

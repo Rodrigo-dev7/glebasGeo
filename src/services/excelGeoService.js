@@ -6,6 +6,8 @@ const HEADER_ALIASES = {
   lon: ['long', 'lon', 'longitude', 'lng'],
   gleba: ['gleba', 'idgleba', 'poligono', 'talhao', 'talhaoid'],
   ponto: ['ponto', 'ordem', 'sequencia', 'vertice'],
+  municipio: ['municipio', 'município', 'nome_municipio', 'cidade', 'city'],
+  uf: ['uf', 'estado', 'sigla_uf', 'state'],
   cultura: ['cultura', 'uso', 'tipouso', 'atividade'],
   formato: ['formatodagleba', 'formato'],
   areaNaoCultivada: ['areanaocultivada', 'areanaocult'],
@@ -73,7 +75,10 @@ async function buildFeature(groupId, rows, filename) {
   })
   const enrichment = await enrichFeatureProperties({
     originalCoordinates,
-    existingProperties: {},
+    existingProperties: {
+      municipio: sortedRows[0]?.municipio || null,
+      uf: sortedRows[0]?.uf || null,
+    },
   })
 
   return {
@@ -136,6 +141,8 @@ export async function parseExcelGeoFile(file) {
 
   const glebaKey = findColumnKey(headers, HEADER_ALIASES.gleba)
   const pointKey = findColumnKey(headers, HEADER_ALIASES.ponto)
+  const municipioKey = findColumnKey(headers, HEADER_ALIASES.municipio)
+  const ufKey = findColumnKey(headers, HEADER_ALIASES.uf)
   const culturaKey = findColumnKey(headers, HEADER_ALIASES.cultura)
   const formatoKey = findColumnKey(headers, HEADER_ALIASES.formato)
   const areaNaoCultivadaKey = findColumnKey(headers, HEADER_ALIASES.areaNaoCultivada)
@@ -146,6 +153,8 @@ export async function parseExcelGeoFile(file) {
       rowIndex: index,
       groupId: String(row[glebaKey] ?? '1').trim() || '1',
       pointOrder: toNumber(row[pointKey]),
+      municipio: row[municipioKey] ? String(row[municipioKey]).trim() : null,
+      uf: row[ufKey] ? String(row[ufKey]).trim() : null,
       cultura: row[culturaKey] ?? null,
       formato: row[formatoKey] ?? null,
       areaNaoCultivada: toNumber(row[areaNaoCultivadaKey]),

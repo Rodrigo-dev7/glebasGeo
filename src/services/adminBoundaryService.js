@@ -25,6 +25,10 @@ const STATE_FIELD_ALIASES = [
   'uf_nome',
 ]
 
+let runtimeBoundariesPromise = null
+let runtimeBoundariesCache = null
+const reverseGeocodeCache = new Map()
+
 function normalizeRing(coordinates = []) {
   if (!coordinates.length) return []
 
@@ -91,6 +95,21 @@ function pointInPolygon(point, geometry) {
   return false
 }
 
+function pointInRuntimeFeature(point, feature) {
+  const [minLon, minLat, maxLon, maxLat] = feature?.bbox || []
+  if (
+    minLon === undefined ||
+    point.lon < minLon ||
+    point.lon > maxLon ||
+    point.lat < minLat ||
+    point.lat > maxLat
+  ) {
+    return false
+  }
+
+  return (feature.rings || []).some((ring) => pointInRing(point, ring))
+}
+
 function normalizeKey(value) {
   return String(value ?? '')
     .normalize('NFD')
@@ -126,24 +145,158 @@ function extractBoundaryInfo(feature) {
   }
 }
 
-export function lookupMunicipalityAndState(coordinates = []) {
-  if (!adminBoundaries?.features?.length) {
-    return null
+function normalizeText(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+const STATE_NAME_TO_UF = {
+  rondonia: 'RO',
+  acre: 'AC',
+  amazonas: 'AM',
+  roraima: 'RR',
+  para: 'PA',
+  amapa: 'AP',
+  tocantins: 'TO',
+  maranhao: 'MA',
+  piaui: 'PI',
+  ceara: 'CE',
+  riograndedonorte: 'RN',
+  paraiba: 'PB',
+  pernambuco: 'PE',
+  alagoas: 'AL',
+  sergipe: 'SE',
+  bahia: 'BA',
+  minasgerais: 'MG',
+  espiritosanto: 'ES',
+  riodejaneiro: 'RJ',
+  saopaulo: 'SP',
+  parana: 'PR',
+  santacatarina: 'SC',
+  riograndedosul: 'RS',
+  matogrossodosul: 'MS',
+  matogrosso: 'MT',
+  goias: 'GO',
+  distritofederal: 'DF',
+}
+
+function normalizeUfFromStateName(value) {
+  const normalized = normalizeText(value).replace(/[^a-z0-9]/g, '')
+  return STATE_NAME_TO_UF[normalized] || null
+}
+
+async function reverseGeocodeMunicipalityAndState(point) {
+  const cacheKey = `${point.lat.toFixed(4)},${point.lon.toFixed(4)}`
+  if (reverseGeocodeCache.has(cacheKey)) {
+    return reverseGeocodeCache.get(cacheKey)
   }
 
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/reverse')
+    url.searchParams.set('format', 'jsonv2')
+    url.searchParams.set('lat', String(point.lat))
+    url.searchParams.set('lon', String(point.lon))
+    url.searchParams.set('zoom', '10')
+    url.searchParams.set('addressdetails', '1')
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Accept: 'application/json',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+      },
+    })
+
+    if (!response.ok) {
+      reverseGeocodeCache.set(cacheKey, null)
+      return null
+    }
+
+    const data = await response.json()
+    const address = data?.address || {}
+    const municipio =
+      address.city ||
+      address.town ||
+      address.village ||
+      address.municipality ||
+      address.county ||
+      null
+    const uf = normalizeUfFromStateName(address.state)
+
+    const result = municipio || uf ? { municipio, uf } : null
+    reverseGeocodeCache.set(cacheKey, result)
+    return result
+  } catch {
+    reverseGeocodeCache.set(cacheKey, null)
+    return null
+  }
+}
+
+async function loadRuntimeBoundaries() {
+  if (runtimeBoundariesCache) return runtimeBoundariesCache
+  if (!runtimeBoundariesPromise) {
+    runtimeBoundariesPromise = fetch('/base-geoserver-municipios-index.json')
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Falha ao carregar base local (${response.status})`)
+        }
+        return response.json()
+      })
+      .then((data) => {
+        runtimeBoundariesCache = data
+        return data
+      })
+      .catch(() => {
+        runtimeBoundariesCache = { type: 'FeatureCollection', features: [] }
+        return runtimeBoundariesCache
+      })
+  }
+
+  return runtimeBoundariesPromise
+}
+
+export async function lookupMunicipalityAndState(coordinates = []) {
   const centroid = computeCentroid(coordinates)
   if (!centroid) return null
 
-  const matchedBoundary = adminBoundaries.features.find((feature) =>
-    pointInPolygon(centroid, feature.geometry)
+  if (adminBoundaries?.features?.length) {
+    const matchedBoundary = adminBoundaries.features.find((feature) =>
+      pointInPolygon(centroid, feature.geometry)
+    )
+
+    if (matchedBoundary) {
+      return extractBoundaryInfo(matchedBoundary)
+    }
+  }
+
+  const runtimeBoundaries = await loadRuntimeBoundaries()
+  if (!runtimeBoundaries?.features?.length) {
+    return null
+  }
+
+  const matchedRuntimeBoundary = runtimeBoundaries.features.find((feature) =>
+    pointInRuntimeFeature(centroid, feature)
   )
 
-  return matchedBoundary ? extractBoundaryInfo(matchedBoundary) : null
+  if (!matchedRuntimeBoundary) {
+    return reverseGeocodeMunicipalityAndState(centroid)
+  }
+
+  return {
+    municipio: matchedRuntimeBoundary.municipio || null,
+    uf: matchedRuntimeBoundary.uf || null,
+  }
 }
 
 export function getAdminBoundaryStats() {
+  const staticCount = adminBoundaries?.features?.length || 0
+  const runtimeCount = runtimeBoundariesCache?.features?.length || 0
+  const featureCount = staticCount || runtimeCount
+
   return {
-    featureCount: adminBoundaries?.features?.length || 0,
-    isConfigured: Boolean(adminBoundaries?.features?.length),
+    featureCount,
+    isConfigured: Boolean(featureCount || runtimeBoundariesPromise),
   }
 }

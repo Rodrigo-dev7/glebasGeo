@@ -12,6 +12,42 @@ import { calculatePolygonAreaHectares } from '../services/glebaEnrichmentService
 const BRAZIL_CENTER = [-14.235, -51.9253]
 const BRAZIL_ZOOM = 4
 
+const BASEMAPS = {
+  dark: {
+    key: 'dark',
+    label: 'Mapa',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    subdomains: 'abcd',
+    maxZoom: 20,
+  },
+  satellite: {
+    key: 'satellite',
+    label: 'Satélite',
+    labels: {
+      key: 'esri-boundaries-places',
+      attribution: 'Labels &copy; Esri, Garmin, HERE, OpenStreetMap contributors, and the GIS user community',
+      url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      maxZoom: 19,
+    },
+    sources: [
+      {
+        key: 'google-satellite',
+        attribution: 'Map data &copy; Google',
+        url: 'https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        maxZoom: 20,
+      },
+      {
+        key: 'esri-world-imagery',
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+        url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        maxZoom: 19,
+      },
+    ],
+  },
+}
+
 function MapInvalidateOnLayout({ revision }) {
   const map = useMap()
   useEffect(() => {
@@ -209,8 +245,8 @@ function popupMarkup(feature) {
           <span class="pcell-val">${escapeHtml(properties.municipio || '-')}</span>
         </div>
         <div class="popup-cell popup-cell--full">
-          <span class="pcell-label">UF</span>
-          <span class="pcell-val pcell-mono">${escapeHtml(properties.uf || '-')}</span>
+          <span class="pcell-label">Localizacao</span>
+          <span class="pcell-val pcell-mono">${escapeHtml(properties.municipio || '-')} ${properties.uf ? `/ ${escapeHtml(properties.uf)}` : ''}</span>
         </div>
       </div>
     </div>
@@ -680,6 +716,24 @@ function ValidationPointMarker({ queryPoint }) {
   )
 }
 
+function BasemapControl({ activeBasemap, onChange }) {
+  return (
+    <div className="basemap-control" role="group" aria-label="Base do mapa">
+      {Object.values(BASEMAPS).map((basemap) => (
+        <button
+          key={basemap.key}
+          type="button"
+          className={`basemap-control__button ${activeBasemap === basemap.key ? 'is-active' : ''}`}
+          onClick={() => onChange(basemap.key)}
+        >
+          <span className={`basemap-control__thumb basemap-control__thumb--${basemap.key}`} aria-hidden="true" />
+          <span className="basemap-control__label">{basemap.label}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function MapView({
   glebas,
   selectedGleba,
@@ -693,6 +747,31 @@ export default function MapView({
 }) {
   const selectedId = selectedGleba?.properties?.id
   const [isVertexDragging, setIsVertexDragging] = useState(false)
+  const [activeBasemap, setActiveBasemap] = useState('dark')
+  const [satelliteSourceIndex, setSatelliteSourceIndex] = useState(0)
+
+  useEffect(() => {
+    if (activeBasemap !== 'satellite') return
+    setSatelliteSourceIndex(0)
+  }, [activeBasemap])
+
+  const currentBasemap = useMemo(() => {
+    if (activeBasemap !== 'satellite') {
+      return BASEMAPS.dark
+    }
+
+    const satelliteSources = BASEMAPS.satellite.sources || []
+    return satelliteSources[satelliteSourceIndex] || satelliteSources[0]
+  }, [activeBasemap, satelliteSourceIndex])
+
+  const handleTileError = () => {
+    if (activeBasemap !== 'satellite') return
+
+    const satelliteSources = BASEMAPS.satellite.sources || []
+    setSatelliteSourceIndex((current) => (
+      current < satelliteSources.length - 1 ? current + 1 : current
+    ))
+  }
 
   return (
     <div className="map-wrapper">
@@ -706,12 +785,32 @@ export default function MapView({
         <MapInvalidateOnLayout revision={layoutRevision} />
         <Pane name="selected-vertices" style={{ zIndex: 650 }} />
 
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          subdomains="abcd"
-          maxZoom={20}
+        <BasemapControl
+          activeBasemap={activeBasemap}
+          onChange={setActiveBasemap}
         />
+
+        <TileLayer
+          key={`${activeBasemap}-${currentBasemap.key}`}
+          attribution={currentBasemap.attribution}
+          url={currentBasemap.url}
+          subdomains={currentBasemap.subdomains}
+          maxZoom={currentBasemap.maxZoom}
+          eventHandlers={{
+            tileerror: handleTileError,
+          }}
+        />
+
+        {activeBasemap === 'satellite' && BASEMAPS.satellite.labels && (
+          <TileLayer
+            key={BASEMAPS.satellite.labels.key}
+            attribution={BASEMAPS.satellite.labels.attribution}
+            url={BASEMAPS.satellite.labels.url}
+            maxZoom={BASEMAPS.satellite.labels.maxZoom}
+            pane="overlayPane"
+            opacity={0.95}
+          />
+        )}
 
         <GeoJSONLayer
           glebas={glebas}

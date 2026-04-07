@@ -1,4 +1,5 @@
 import { getAdminBoundaryStats, lookupMunicipalityAndState } from './adminBoundaryService'
+import { resolveMunicipalityFromProperties } from './ibgeMunicipalityService'
 
 const EARTH_RADIUS_METERS = 6371008.8
 
@@ -51,15 +52,24 @@ export async function enrichFeatureProperties({
   originalCoordinates,
   existingProperties = {},
 }) {
-  const boundaryMatch = lookupMunicipalityAndState(originalCoordinates)
+  const ibgeResolved = resolveMunicipalityFromProperties(existingProperties)
+  const boundaryMatch = await lookupMunicipalityAndState(originalCoordinates)
   const adminBoundaryStats = getAdminBoundaryStats()
   const computedArea = calculatePolygonAreaHectares(originalCoordinates)
   const normalizedArea =
     typeof existingProperties.area === 'number' && Number.isFinite(existingProperties.area)
       ? existingProperties.area
       : computedArea
-  const normalizedMunicipio = existingProperties.municipio || boundaryMatch?.municipio || null
-  const normalizedUf = existingProperties.uf || boundaryMatch?.uf || null
+  const normalizedMunicipio =
+    existingProperties.municipio ||
+    ibgeResolved?.municipio ||
+    boundaryMatch?.municipio ||
+    null
+  const normalizedUf =
+    existingProperties.uf ||
+    ibgeResolved?.uf ||
+    boundaryMatch?.uf ||
+    null
 
   return {
     area: normalizedArea,
@@ -70,6 +80,8 @@ export async function enrichFeatureProperties({
       areaCalculatedHa: computedArea,
       municipalitySource: existingProperties.municipio
         ? 'input'
+        : ibgeResolved?.municipio
+          ? 'ibge_lookup'
         : boundaryMatch?.municipio
           ? 'local_boundary'
           : adminBoundaryStats.isConfigured
@@ -77,6 +89,8 @@ export async function enrichFeatureProperties({
             : 'pending_local_boundary',
       ufSource: existingProperties.uf
         ? 'input'
+        : ibgeResolved?.uf
+          ? 'ibge_lookup'
         : boundaryMatch?.uf
           ? 'local_boundary'
           : adminBoundaryStats.isConfigured

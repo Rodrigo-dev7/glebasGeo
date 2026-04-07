@@ -1,25 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <defs>
-    <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0ea5e9"/>
-      <stop offset="100%" stop-color="#22c55e"/>
+    <linearGradient id="bg" x1="10" y1="8" x2="54" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#11243c"/>
+      <stop offset="100%" stop-color="#09111d"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="18" y1="16" x2="46" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8ddcff"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="accentSoft" x1="20" y1="20" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#67e8f9" stop-opacity="0.7"/>
     </linearGradient>
   </defs>
 
-  <!-- Fundo -->
-  <rect width="64" height="64" rx="14" fill="#020617"/>
+  <rect width="64" height="64" rx="18" fill="url(#bg)"/>
+  <rect x="1" y="1" width="62" height="62" rx="17" stroke="#bae6fd" stroke-opacity="0.14"/>
 
-  <!-- Globo -->
-  <circle cx="32" cy="32" r="18" stroke="url(#grad)" stroke-width="2" fill="none"/>
+  <circle cx="32" cy="32" r="16" stroke="url(#accent)" stroke-width="2.2"/>
+  <path d="M16 32h32" stroke="url(#accentSoft)" stroke-width="1.6" stroke-linecap="round" opacity="0.8"/>
+  <path d="M32 16c5.2 5.1 5.2 26.9 0 32" stroke="url(#accentSoft)" stroke-width="1.6" stroke-linecap="round" opacity="0.8"/>
+  <path d="M32 16c-5.2 5.1-5.2 26.9 0 32" stroke="url(#accentSoft)" stroke-width="1.6" stroke-linecap="round" opacity="0.52"/>
+  <path d="M21 23.5c3.2-2.7 6.8-4 11-4s7.8 1.3 11 4" stroke="url(#accentSoft)" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>
+  <path d="M21 40.5c3.2 2.7 6.8 4 11 4s7.8-1.3 11-4" stroke="url(#accentSoft)" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>
 
-  <!-- Linhas do globo -->
-  <path d="M14 32h36M32 14c6 6 6 30 0 36M32 14c-6 6-6 30 0 36" 
-        stroke="url(#grad)" 
-        stroke-width="1" 
-        opacity="0.6"/>
-
-  <!-- Texto GEO -->
-  <text x="32" y="38" text-anchor="middle" font-size="14" fill="#38bdf8" font-family="Arial, sans-serif" font-weight="bold">
-    GEO
-  </text>
+  <path d="M41.5 20.5 27.5 34.5" stroke="#dff6ff" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="42" cy="20" r="4.5" fill="#0b1728" stroke="url(#accent)" stroke-width="1.8"/>
+  <circle cx="27" cy="35" r="3.5" fill="#0b1728" stroke="#bff1ff" stroke-width="1.6"/>
+  <path d="M25.2 45.2c1.6-1.8 3.8-2.7 6.8-2.7 3.1 0 5.4.9 6.9 2.7" stroke="#d6f4ff" stroke-width="1.8" stroke-linecap="round" opacity="0.92"/>
 </svg>

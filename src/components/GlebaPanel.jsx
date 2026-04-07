@@ -200,6 +200,13 @@ export default function GlebaPanel({
 
       <div className="panel-body">
         <h3 className="panel-nome" id={titleId}>{properties.nome}</h3>
+        <div className="panel-location-card">
+          <span className="panel-location-card__label">Municipio / UF</span>
+          <strong className="panel-location-card__value">
+            {properties.municipio || '-'}
+            {properties.uf ? ` / ${properties.uf}` : ''}
+          </strong>
+        </div>
 
         <div className="panel-edit-hint">
           Clique na gleba e arraste diretamente os pontos verdes ou vermelhos no mapa para redimensionar. A area e a validacao sao recalculadas automaticamente.
