@@ -2,6 +2,10 @@
 
 Aplicacao web para validacao geoespacial de glebas, com visualizacao em mapa, importacao de arquivos, edicao de vertices e comparacao com imoveis do CAR em KML/KMZ.
 
+![mapa](https://github.com/user-attachments/assets/e41f043f-5ad0-441c-95a3-f67a23aa650c)
+
+
+
 ## Visao geral
 
 O projeto foi construido com React + Vite e usa Leaflet para renderizacao do mapa. O foco principal hoje e:
