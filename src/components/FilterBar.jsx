@@ -40,7 +40,6 @@ const FILTERS = [
   { key: 'todas', label: 'Todas', icon: IconAll, stat: 'total' },
   { key: 'valida', label: 'Validas', icon: IconSuccess, stat: 'validas' },
   { key: 'invalida', label: 'Invalidas', icon: IconDanger, stat: 'invalidas' },
-  { key: 'pendente', label: 'Pendentes', icon: IconPending, stat: 'pendentes' },
 ]
 
 export default function FilterBar({ activeFilter, setActiveFilter, stats }) {

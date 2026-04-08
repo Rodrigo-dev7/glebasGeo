@@ -7,10 +7,10 @@ import { useMap } from 'react-leaflet'
 import L from 'leaflet'
 
 const ITEMS = [
-  { color: '#22c55e', label: 'Gleba válida' },
+  { color: '#22c55e', label: 'Gleba valida' },
   { color: '#ef4444', label: 'Gleba com erro' },
-  { color: '#f59e0b', label: 'Gleba pendente' },
   { color: '#38bdf8', label: 'Gleba encontrada' },
+  { color: '#a855f7', label: 'Imovel CAR/KML' },
 ]
 
 export default function Legend() {

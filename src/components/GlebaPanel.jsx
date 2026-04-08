@@ -1,19 +1,19 @@
 /**
  * GlebaPanel.jsx
- * Painel lateral com detalhes, erros SICOR e coordenadas da gleba selecionada.
+ * Painel lateral com detalhes, erros SICOR, validacao CAR e coordenadas da gleba selecionada.
  */
 import { useMemo, useState } from 'react'
 
 const STATUS_CONFIG = {
-  valida: { label: 'Válida', icon: 'Válida', cls: 'panel-status--valida' },
-  invalida: { label: 'Inválida', icon: 'Inválida', cls: 'panel-status--invalida' },
+  valida: { label: 'Valida', icon: 'Valida', cls: 'panel-status--valida' },
+  invalida: { label: 'Invalida', icon: 'Invalida', cls: 'panel-status--invalida' },
   pendente: { label: 'Pendente', icon: 'Pendente', cls: 'panel-status--pendente' },
 }
 
 const TABS = [
   { key: 'resumo', label: 'Resumo' },
   { key: 'coordenadas', label: 'Coordenadas' },
-  { key: 'criticas', label: 'Críticas SICOR' },
+  { key: 'criticas', label: 'Criticas SICOR' },
 ]
 
 function DetailRow({ label, value, mono = false }) {
@@ -72,26 +72,53 @@ function CoordinateTable({ coordinates = [] }) {
   )
 }
 
+function CarValidationSection({ carValidation }) {
+  if (!carValidation) return null
+
+  const statusLabel = {
+    not_loaded: 'Nao analisado',
+    clear: 'Sem sobreposicao',
+    overlap: 'Com sobreposicao',
+  }[carValidation.status] || 'Nao analisado'
+
+  return (
+    <div className="panel-section">
+      <div className="panel-section-title">Validacao CAR</div>
+      <div className="details-grid">
+        <DetailRow label="Status" value={statusLabel} />
+        <DetailRow label="Sobreposicoes" value={carValidation.overlapCount} />
+      </div>
+
+      <div className="details-grid details-grid--full">
+        <DetailRow label="Base de referencia" value={carValidation.referenceFileName} />
+        <DetailRow label="Resultado" value={carValidation.message} />
+      </div>
+    </div>
+  )
+}
+
 function SummarySection({ properties, metrics }) {
+  const hasCarOverlap = properties.carOverlapValidation?.status === 'overlap'
+
   return (
     <>
       <div className="panel-section">
         <div className="panel-section-title">Dados cadastrais</div>
         <div className="details-grid">
           <DetailRow
-            label="Área total"
+            label="Area total"
             value={properties.area ? `${properties.area} ha` : null}
           />
           <DetailRow label="Tipo de uso" value={properties.tipo_uso} />
-          <DetailRow label="Município" value={properties.municipio} />
+          <DetailRow label="Municipio" value={properties.municipio} />
           <DetailRow label="UF" value={properties.uf} />
-          <DetailRow label="Situação" value={properties.situacao_cadastral} />
-          <DetailRow label="Data de inscrição" value={properties.data_inscricao} />
+          <DetailRow label="Situacao" value={properties.situacao_cadastral} />
+          <DetailRow label="Data de inscricao" value={properties.data_inscricao} />
         </div>
 
         <div className="details-grid details-grid--full">
-          <DetailRow label="Proprietário" value={properties.proprietario} />
-          <DetailRow label="Código SNCR/CAR" value={properties.codigo_imovel} mono />
+          <DetailRow label="Proprietario" value={properties.proprietario} />
+          <DetailRow label="Codigo SNCR/CAR" value={properties.codigo_imovel} mono />
           <DetailRow label="Arquivo de origem" value={properties.origem_arquivo} />
         </div>
       </div>
@@ -99,17 +126,19 @@ function SummarySection({ properties, metrics }) {
       <div className="panel-section">
         <div className="panel-section-title">Regras SICOR</div>
         <div className="details-grid">
-          <DetailRow label="Polígono fechado" value={metrics.isClosed ? 'Sim' : 'Não'} />
+          <DetailRow label="Poligono fechado" value={metrics.isClosed ? 'Sim' : 'Nao'} />
           <DetailRow label="Pontos informados" value={metrics.originalPointCount} />
-          <DetailRow label="Pontos únicos" value={metrics.uniquePointCount} />
-          <DetailRow label="Repetições do primeiro" value={metrics.repeatedStartCount} />
+          <DetailRow label="Pontos unicos" value={metrics.uniquePointCount} />
+          <DetailRow label="Repeticoes do primeiro" value={metrics.repeatedStartCount} />
         </div>
       </div>
 
-      {!properties.errors?.length && !properties.warnings?.length && (
+      <CarValidationSection carValidation={properties.carOverlapValidation} />
+
+      {!properties.errors?.length && !properties.warnings?.length && !hasCarOverlap && (
         <div className="panel-ok">
-          <span className="panel-ok-icon">✓</span>
-          <p>Gleba validada sem críticas nas duas regras SICOR analisadas.</p>
+          <span className="panel-ok-icon">OK</span>
+          <p>Gleba validada sem criticas nas regras SICOR analisadas.</p>
         </div>
       )}
     </>
@@ -120,8 +149,8 @@ function CritiquesSection({ properties }) {
   if (!properties.errors?.length && !properties.warnings?.length) {
     return (
       <div className="panel-ok">
-        <span className="panel-ok-icon">✓</span>
-        <p>Nenhuma crítica registrada para esta gleba.</p>
+        <span className="panel-ok-icon">OK</span>
+        <p>Nenhuma critica registrada para esta gleba.</p>
       </div>
     )
   }
@@ -131,7 +160,7 @@ function CritiquesSection({ properties }) {
       {properties.errors?.length > 0 && (
         <div className="panel-section">
           <div className="panel-section-title panel-section-title--err">
-            Críticas SICOR <span className="issue-count">{properties.errors.length}</span>
+            Criticas SICOR <span className="issue-count">{properties.errors.length}</span>
           </div>
           <div className="issues-list">
             {properties.errors.map((error, index) => (
@@ -192,7 +221,7 @@ export default function GlebaPanel({
           <span className="panel-id">{properties.id}</span>
           {onClose && (
             <button className="panel-close" onClick={onClose} title="Fechar">
-              ×
+              x
             </button>
           )}
         </div>
@@ -209,7 +238,7 @@ export default function GlebaPanel({
         </div>
 
         <div className="panel-edit-hint">
-          Clique na gleba e arraste diretamente os pontos verdes ou vermelhos no mapa para redimensionar. A area e a validacao sao recalculadas automaticamente.
+          Clique na gleba e arraste diretamente os pontos verdes ou vermelhos no mapa para redimensionar. A area, a validacao e a checagem contra o CAR sao recalculadas automaticamente.
         </div>
 
         {showTabs && (

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 function IconFileSelect() {
   return (
@@ -19,6 +19,16 @@ function IconExport() {
   )
 }
 
+function IconLayer() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
+    </svg>
+  )
+}
+
 function IconClear() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -30,8 +40,147 @@ function IconClear() {
   )
 }
 
+function IconChevronToggle({ expanded }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polyline points={expanded ? '6 15 12 9 18 15' : '9 6 15 12 9 18'} />
+    </svg>
+  )
+}
+
 function formatCoordinate(value) {
   return Number.isFinite(value) ? value.toFixed(6) : '-'
+}
+
+function formatCarDatasetCount(value) {
+  return `${value || 0} imovel(is)`
+}
+
+function CarDatasetList({
+  datasets,
+  activeDatasetId,
+  onSelect,
+  onRemove,
+  onClearAll,
+}) {
+  const [isExpanded, setIsExpanded] = useState(true)
+  const [contentHeight, setContentHeight] = useState(0)
+  const contentRef = useRef(null)
+
+  useEffect(() => {
+    if (datasets?.length) {
+      setIsExpanded(true)
+    }
+  }, [datasets?.length])
+
+  useEffect(() => {
+    const node = contentRef.current
+    if (!node) return
+
+    const updateHeight = () => {
+      setContentHeight(node.scrollHeight)
+    }
+
+    updateHeight()
+
+    if (typeof ResizeObserver !== 'function') {
+      return undefined
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateHeight()
+    })
+
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [datasets, isExpanded])
+
+  if (!datasets?.length) return null
+
+  return (
+    <div className="coord-car-library">
+      <div className="coord-car-library__header">
+        <div>
+          <div className="coord-car-library__title">Bases CAR importadas</div>
+          <div className="coord-car-library__subtitle">
+            Selecione qual base deseja exibir e validar no mapa.
+          </div>
+        </div>
+
+        <div className="coord-car-library__controls">
+          {datasets.length > 1 && (
+            <button
+              type="button"
+              className="coord-inline-clear coord-inline-clear--ghost"
+              onClick={onClearAll}
+            >
+              Limpar CAR
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="coord-car-library__toggle"
+            onClick={() => setIsExpanded((current) => !current)}
+            aria-expanded={isExpanded}
+            aria-label={isExpanded ? 'Recolher bases CAR importadas' : 'Expandir bases CAR importadas'}
+            title={isExpanded ? 'Recolher' : 'Expandir'}
+          >
+            <span>{isExpanded ? 'Ocultar' : 'Exibir'}</span>
+            <span className={`coord-car-library__toggle-icon${isExpanded ? ' is-expanded' : ''}`}>
+              <IconChevronToggle expanded={isExpanded} />
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <div
+        className={`coord-car-library__body${isExpanded ? ' is-expanded' : ''}`}
+        style={{ maxHeight: isExpanded ? `${contentHeight}px` : '0px' }}
+      >
+        <div ref={contentRef} className="coord-car-library__list">
+          {datasets.map((dataset) => {
+            const isActive = dataset.datasetId === activeDatasetId
+
+            return (
+              <div
+                key={dataset.datasetId}
+                className={`coord-car-card${isActive ? ' coord-car-card--active' : ''}`}
+              >
+                <button
+                  type="button"
+                  className="coord-car-card__select"
+                  onClick={() => onSelect(dataset.datasetId)}
+                  aria-pressed={isActive}
+                  title={isActive ? 'Base CAR ativa' : 'Selecionar esta base CAR'}
+                >
+                  <div className="coord-car-card__row">
+                    <span className="coord-car-card__name">{dataset.metadata.fileName}</span>
+                    <span className={`coord-car-card__badge${isActive ? ' coord-car-card__badge--active' : ''}`}>
+                      {isActive ? 'Ativo' : 'Selecionar'}
+                    </span>
+                  </div>
+
+                  <div className="coord-car-card__meta">
+                    <span>{dataset.metadata.sourceType || 'KML/KMZ CAR'}</span>
+                    <span>{formatCarDatasetCount(dataset.metadata.glebaCount)}</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className="coord-inline-clear"
+                  onClick={() => onRemove(dataset.datasetId)}
+                >
+                  Remover
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function ResultBlock({ result }) {
@@ -86,11 +235,21 @@ export default function CoordinateValidationPanel({
   isImporting,
   importDataset,
   clearImportedDataset,
+  carReferenceDataset,
+  carReferenceDatasets,
+  activeCarReferenceDatasetId,
+  carImportError,
+  isImportingCar,
+  importCarReferenceDataset,
+  selectCarReferenceDataset,
+  removeCarReferenceDataset,
+  clearCarReferenceDataset,
   validationResult,
   validateCoordinate,
   exportReport,
 }) {
   const fileInputRef = useRef(null)
+  const carFileInputRef = useRef(null)
   const [lat, setLat] = useState('')
   const [lon, setLon] = useState('')
   const [inputError, setInputError] = useState('')
@@ -100,6 +259,14 @@ export default function CoordinateValidationPanel({
     if (!file) return
 
     await importDataset(file)
+    event.target.value = ''
+  }
+
+  const handleCarFileChange = async (event) => {
+    const [file] = event.target.files || []
+    if (!file) return
+
+    await importCarReferenceDataset(file)
     event.target.value = ''
   }
 
@@ -122,6 +289,10 @@ export default function CoordinateValidationPanel({
     fileInputRef.current?.click()
   }
 
+  const handleSelectCarFile = () => {
+    carFileInputRef.current?.click()
+  }
+
   return (
     <section className="coord-panel">
       <div className="coord-panel-header">
@@ -140,6 +311,15 @@ export default function CoordinateValidationPanel({
         disabled={isImporting}
       />
 
+      <input
+        ref={carFileInputRef}
+        className="coord-file-input"
+        type="file"
+        accept=".kml,.kmz"
+        onChange={handleCarFileChange}
+        disabled={isImportingCar}
+      />
+
       <div className="coord-actions-grid">
         <button
           type="button"
@@ -151,6 +331,18 @@ export default function CoordinateValidationPanel({
             <IconFileSelect />
           </span>
           <span className="coord-action-btn__label">Selecionar Arquivo</span>
+        </button>
+
+        <button
+          type="button"
+          className="coord-action-btn coord-action-btn--secondary"
+          onClick={handleSelectCarFile}
+          disabled={isImportingCar}
+        >
+          <span className="coord-action-btn__icon">
+            <IconLayer />
+          </span>
+          <span className="coord-action-btn__label">Importar KML/KMZ CAR</span>
         </button>
 
         <button
@@ -180,10 +372,10 @@ export default function CoordinateValidationPanel({
 
       <div className="coord-upload">
         <span className="coord-upload-label">
-          {isImporting ? 'Processando arquivo...' : 'Formatos suportados: Excel e GeoJSON'}
+          {isImporting || isImportingCar ? 'Processando arquivo...' : 'Formatos suportados: Excel, GeoJSON, KML e KMZ'}
         </span>
         <span className="coord-upload-hint">
-          Importe arquivos `.xls`, `.xlsx`, `.geojson` ou `.json` com pontos ou glebas.
+          Importe a gleba em `.xls`, `.xlsx`, `.geojson` ou `.json` e carregue a base do CAR em `.kml` ou `.kmz` para checar sobreposicao e visualizar o imovel no mapa.
         </span>
       </div>
 
@@ -196,7 +388,24 @@ export default function CoordinateValidationPanel({
         </div>
       )}
 
+      <CarDatasetList
+        datasets={carReferenceDatasets}
+        activeDatasetId={activeCarReferenceDatasetId}
+        onSelect={selectCarReferenceDataset}
+        onRemove={removeCarReferenceDataset}
+        onClearAll={clearCarReferenceDataset}
+      />
+
+      {carReferenceDataset && (
+        <div className="coord-dataset-meta coord-dataset-meta--car">
+          <span>Base ativa no mapa</span>
+          <span>{carReferenceDataset.metadata.fileName}</span>
+          <span>{formatCarDatasetCount(carReferenceDataset.metadata.glebaCount)}</span>
+        </div>
+      )}
+
       {importError && <div className="coord-feedback coord-feedback--error">{importError}</div>}
+      {carImportError && <div className="coord-feedback coord-feedback--error">{carImportError}</div>}
 
       <form className="coord-form" onSubmit={handleSubmit}>
         <div className="coord-input-grid">

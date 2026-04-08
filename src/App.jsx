@@ -29,6 +29,15 @@ export default function App() {
     isImporting,
     importDataset,
     clearImportedDataset,
+    carReferenceDataset,
+    carReferenceDatasets,
+    activeCarReferenceDatasetId,
+    carImportError,
+    isImportingCar,
+    importCarReferenceDataset,
+    selectCarReferenceDataset,
+    removeCarReferenceDataset,
+    clearCarReferenceDataset,
     validationResult,
     validateCoordinate,
     queryPoint,
@@ -103,6 +112,15 @@ export default function App() {
           isImporting={isImporting}
           importDataset={importDataset}
           clearImportedDataset={clearImportedDataset}
+          carReferenceDataset={carReferenceDataset}
+          carReferenceDatasets={carReferenceDatasets}
+          activeCarReferenceDatasetId={activeCarReferenceDatasetId}
+          carImportError={carImportError}
+          isImportingCar={isImportingCar}
+          importCarReferenceDataset={importCarReferenceDataset}
+          selectCarReferenceDataset={selectCarReferenceDataset}
+          removeCarReferenceDataset={removeCarReferenceDataset}
+          clearCarReferenceDataset={clearCarReferenceDataset}
           validationResult={validationResult}
           validateCoordinate={validateCoordinate}
           exportReport={exportReport}
@@ -127,6 +145,7 @@ export default function App() {
           />
           <MapView
             glebas={allGlebas}
+            carReferenceDataset={carReferenceDataset}
             selectedGleba={selectedGleba}
             setSelectedGleba={setSelectedGleba}
             queryPoint={queryPoint}

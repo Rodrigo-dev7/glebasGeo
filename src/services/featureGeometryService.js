@@ -1,5 +1,5 @@
 import { validateSicorPolygon } from './sicorGlebaValidationService'
-import { enrichFeatureProperties } from './glebaEnrichmentService'
+import { calculatePolygonAreaHectares, enrichFeatureProperties } from './glebaEnrichmentService'
 
 function coordinatesEqual(left, right) {
   if (!left || !right) return false
@@ -33,7 +33,7 @@ export function getEditableCoordinates(feature) {
   return displayCoordinates.map(([lon, lat]) => [Number(lon), Number(lat)])
 }
 
-export async function rebuildFeatureWithCoordinates(feature, editableCoordinates) {
+function buildFeatureGeometryState(editableCoordinates) {
   const normalizedCoordinates = editableCoordinates.map(([lon, lat]) => [Number(lon), Number(lat)])
   const displayCoordinates = ensureClosedRing(normalizedCoordinates)
   const originalCoordinates = [...displayCoordinates]
@@ -41,32 +41,66 @@ export async function rebuildFeatureWithCoordinates(feature, editableCoordinates
     originalCoordinates,
     displayCoordinates,
   })
-  const enrichment = await enrichFeatureProperties({
-    feature,
+
+  return {
+    normalizedCoordinates,
+    displayCoordinates,
     originalCoordinates,
-    existingProperties: feature.properties || {},
-  })
+    sicor,
+  }
+}
+
+export function buildFeatureWithCoordinatesPreview(feature, editableCoordinates) {
+  const {
+    normalizedCoordinates,
+    displayCoordinates,
+    originalCoordinates,
+    sicor,
+  } = buildFeatureGeometryState(editableCoordinates)
+  const calculatedArea = calculatePolygonAreaHectares(normalizedCoordinates)
 
   return {
     ...feature,
     properties: {
       ...feature.properties,
-      area: enrichment.area,
-      municipio: enrichment.municipio,
-      uf: enrichment.uf,
+      area: calculatedArea,
       status: sicor.status,
       errors: sicor.errors,
       warnings: sicor.warnings,
       coordinateStatuses: sicor.coordinateStatuses,
       validationMetrics: sicor.metrics,
-      enrichment,
       originalCoordinates,
       displayCoordinates,
       total_pontos: normalizedCoordinates.length,
+      enrichment: {
+        ...feature.properties?.enrichment,
+        areaSource: 'calculated',
+        areaCalculatedHa: calculatedArea,
+      },
     },
     geometry: {
       ...feature.geometry,
       coordinates: [displayCoordinates],
+    },
+  }
+}
+
+export async function rebuildFeatureWithCoordinates(feature, editableCoordinates) {
+  const previewFeature = buildFeatureWithCoordinatesPreview(feature, editableCoordinates)
+  const enrichment = await enrichFeatureProperties({
+    feature: previewFeature,
+    originalCoordinates: previewFeature.properties.originalCoordinates,
+    existingProperties: previewFeature.properties || {},
+  })
+
+  return {
+    ...previewFeature,
+    properties: {
+      ...previewFeature.properties,
+      area: enrichment.area,
+      municipio: enrichment.municipio,
+      uf: enrichment.uf,
+      enrichment,
     },
   }
 }

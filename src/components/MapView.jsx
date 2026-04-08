@@ -94,12 +94,62 @@ const MATCHED_OVERRIDES = {
   weight: 4.5,
 }
 
+const CAR_REFERENCE_STYLE = {
+  color: '#c084fc',
+  fillColor: '#a855f7',
+  fillOpacity: 0.08,
+  opacity: 0.95,
+  weight: 2.2,
+  dashArray: '10 6',
+}
+
+const CAR_REFERENCE_MATCHED_STYLE = {
+  color: '#f59e0b',
+  fillColor: '#f59e0b',
+  fillOpacity: 0.2,
+  opacity: 1,
+  weight: 3,
+  dashArray: '8 4',
+}
+
 const HIDDEN_STYLE = {
   color: 'transparent',
   fillColor: 'transparent',
   opacity: 0,
   fillOpacity: 0,
   weight: 0.1,
+}
+
+const DEFAULT_FLY_OPTIONS = {
+  animate: true,
+  duration: 1.6,
+  easeLinearity: 0.18,
+}
+
+const FLY_BOUNDS_OPTIONS = {
+  ...DEFAULT_FLY_OPTIONS,
+  padding: [50, 50],
+}
+
+const FLY_FEATURE_BOUNDS_OPTIONS = {
+  ...DEFAULT_FLY_OPTIONS,
+  padding: [60, 60],
+  maxZoom: 17,
+}
+
+function animateToBounds(map, bounds, options = {}) {
+  if (!bounds?.isValid()) return
+  map.flyToBounds(bounds, { ...FLY_BOUNDS_OPTIONS, ...options })
+}
+
+function animateToPoint(map, point, zoom = null, options = {}) {
+  if (!point) return
+
+  const targetZoom = Number.isFinite(zoom) ? zoom : map.getZoom()
+  map.flyTo([point.lat, point.lon], targetZoom, {
+    ...DEFAULT_FLY_OPTIONS,
+    ...options,
+  })
 }
 
 function buildEditVertexIcon(isValid) {
@@ -147,16 +197,78 @@ function formatArea(area) {
   return typeof area === 'number' ? `${area} ha` : '-'
 }
 
+function normalizeNumericArea(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value.replace(',', '.').trim())
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  return null
+}
+
+function resolvePopupArea(feature, areaOverride = null) {
+  if (typeof areaOverride === 'number') {
+    return areaOverride
+  }
+
+  const ring =
+    feature?.properties?.displayCoordinates ||
+    feature?.geometry?.coordinates?.[0] ||
+    []
+  const calculatedArea = calculatePolygonAreaHectares(ring)
+
+  return typeof calculatedArea === 'number'
+    ? calculatedArea
+    : feature?.properties?.area
+}
+
 function updateAreaPreviewMarkerText(marker, area) {
   const root = marker.getElement?.()
   const val = root?.querySelector?.('.edit-area-preview-value')
   if (val) val.textContent = formatArea(area)
 }
 
-function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, vertexIndex) {
+function isFeaturePopupOpen(leafMap, featureId) {
+  let isOpen = false
+
+  leafMap.eachLayer((layer) => {
+    if (isOpen) return
+    if (layer.feature?.properties?.id !== featureId) return
+
+    const popup = layer.getPopup?.()
+    if (popup && leafMap.hasLayer(popup)) {
+      isOpen = true
+    }
+  })
+
+  return isOpen
+}
+
+function restoreFeaturePopup(leafMap, featureId) {
+  let restored = false
+
+  leafMap.eachLayer((layer) => {
+    if (restored) return
+    if (layer.feature?.properties?.id !== featureId) return
+
+    if (typeof layer.openPopup === 'function') {
+      layer.openPopup()
+      restored = true
+    }
+  })
+
+  return restored
+}
+
+function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, vertexIndex, shouldOpenPopup = false) {
   const group = L.layerGroup().addTo(leafMap)
   const style = STATUS_STYLES[selectedGleba.properties.status] || STATUS_STYLES.pendente
   const ll = ringLonLat.map(([lon, lat]) => [lat, lon])
+  const previewArea = calculatePolygonAreaHectares(ringLonLat)
 
   if (selectedGleba.properties.status === 'invalida' && selectedGleba.properties.originalCoordinates?.length > 1) {
     L.polyline(
@@ -176,6 +288,14 @@ function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, verte
     interactive: false,
   })
   poly.addTo(group)
+  poly.bindPopup(popupMarkup(selectedGleba, previewArea), {
+    className: 'custom-popup',
+    maxWidth: 280,
+  })
+
+  if (shouldOpenPopup) {
+    poly.openPopup()
+  }
 
   const outline = L.polyline([...ll, ll[0]], {
     color: '#f8fafc',
@@ -206,8 +326,10 @@ function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, verte
   return { group, poly, outline, areaMarker, helperLine }
 }
 
-function updateVertexDragPreviewLayers(layers, vertexIndex, ringLonLat) {
+function updateVertexDragPreviewLayers(layers, selectedGleba, vertexIndex, ringLonLat) {
   if (!layers) return
+
+  const area = calculatePolygonAreaHectares(ringLonLat)
   const ll = ringLonLat.map(([lon, lat]) => [lat, lon])
   layers.poly.setLatLngs(ll)
   layers.outline.setLatLngs([...ll, ll[0]])
@@ -224,11 +346,19 @@ function updateVertexDragPreviewLayers(layers, vertexIndex, ringLonLat) {
     layers.helperLine.setLatLngs([])
   }
   layers.areaMarker.setLatLng([ringLonLat[vertexIndex][1], ringLonLat[vertexIndex][0]])
-  updateAreaPreviewMarkerText(layers.areaMarker, calculatePolygonAreaHectares(ringLonLat))
+  updateAreaPreviewMarkerText(layers.areaMarker, area)
+  layers.poly.getPopup?.()?.setContent(popupMarkup(selectedGleba, area))
 }
 
-function popupMarkup(feature) {
+function popupMarkup(feature, areaOverride = null) {
   const properties = feature.properties || {}
+  const area = resolvePopupArea(feature, areaOverride)
+  const carValidation = properties.carOverlapValidation
+  const showCarValidation = carValidation?.status && carValidation.status !== 'not_loaded'
+  const carStatusLabel =
+    carValidation?.status === 'overlap'
+      ? 'Gleba dentro do CAR'
+      : 'Gleba fora do CAR'
 
   return `
     <div class="gleba-popup">
@@ -238,7 +368,7 @@ function popupMarkup(feature) {
       <div class="popup-grid">
         <div class="popup-cell">
           <span class="pcell-label">Area</span>
-          <span class="pcell-val">${escapeHtml(formatArea(properties.area))}</span>
+          <span class="pcell-val">${escapeHtml(formatArea(area))}</span>
         </div>
         <div class="popup-cell">
           <span class="pcell-label">Municipio</span>
@@ -247,6 +377,60 @@ function popupMarkup(feature) {
         <div class="popup-cell popup-cell--full">
           <span class="pcell-label">Localizacao</span>
           <span class="pcell-val pcell-mono">${escapeHtml(properties.municipio || '-')} ${properties.uf ? `/ ${escapeHtml(properties.uf)}` : ''}</span>
+        </div>
+        ${showCarValidation ? `
+          <div class="popup-cell popup-cell--full">
+            <span class="pcell-label">Validacao CAR</span>
+            <span class="pcell-val">${escapeHtml(carStatusLabel)}</span>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `
+}
+
+function carReferencePopupMarkup(feature) {
+  const properties = feature.properties || {}
+  const carNumber =
+    properties.numero_car_recibo ||
+    properties.cod_imovel ||
+    properties.codigo_imovel ||
+    properties.id ||
+    '-'
+  const municipalityUf = [
+    properties.municipio || '-',
+    properties.uf || null,
+  ].filter(Boolean).join(' / ')
+  const geometryArea =
+    feature.geometry?.type === 'Polygon'
+      ? calculatePolygonAreaHectares(feature.geometry.coordinates?.[0] || [])
+      : feature.geometry?.type === 'MultiPolygon'
+        ? Number(
+            (feature.geometry.coordinates || []).reduce(
+              (total, polygon) => total + (calculatePolygonAreaHectares(polygon?.[0] || []) || 0),
+              0
+            ).toFixed(2)
+          )
+        : null
+  const resolvedArea = normalizeNumericArea(properties.area) ?? geometryArea
+
+  return `
+    <div class="gleba-popup">
+      <div class="popup-top">
+        <div class="popup-nome">Im&oacute;vel do CAR</div>
+      </div>
+      <div class="popup-grid">
+        <div class="popup-cell popup-cell--full">
+          <span class="pcell-label">N&ordm; do CAR</span>
+          <span class="pcell-val pcell-mono">${escapeHtml(carNumber)}</span>
+        </div>
+        <div class="popup-cell popup-cell--full">
+          <span class="pcell-label">Munic&iacute;pio / UF</span>
+          <span class="pcell-val">${escapeHtml(municipalityUf)}</span>
+        </div>
+        <div class="popup-cell popup-cell--full">
+          <span class="pcell-label">&Aacute;rea</span>
+          <span class="pcell-val">${escapeHtml(formatArea(resolvedArea))}</span>
         </div>
       </div>
     </div>
@@ -345,6 +529,8 @@ function GeoJSONLayer({
       glebas?.features?.map((feature) => ({
         id: feature.properties.id,
         area: feature.properties.area,
+        carOverlapStatus: feature.properties.carOverlapValidation?.status || null,
+        carOverlapCount: feature.properties.carOverlapValidation?.overlapCount || 0,
         coordinates: feature.geometry?.coordinates?.[0] || [],
       })) || []
     )
@@ -360,6 +546,7 @@ function GeoJSONLayer({
     if (!glebas?.features?.length) return
 
     L.geoJSON(glebas, {
+      pane: 'gleba-layer',
       onEachFeature: (feature, leafletLayer) => {
         const featureId = feature.properties.id
 
@@ -422,14 +609,14 @@ function GeoJSONLayer({
     if (viewportRequest.type === 'dataset') {
       const bounds = datasetBounds(glebas)
       if (bounds?.isValid()) {
-        leafMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 })
+        animateToBounds(leafMap, bounds, { maxZoom: 14 })
       }
       lastViewportRequestRef.current = viewportRequest.datasetKey
       return
     }
 
     if (viewportRequest.type === 'home') {
-      leafMap.setView(BRAZIL_CENTER, BRAZIL_ZOOM, { animate: true })
+      leafMap.flyTo(BRAZIL_CENTER, BRAZIL_ZOOM, DEFAULT_FLY_OPTIONS)
       lastViewportRequestRef.current = viewportRequest.requestKey
       return
     }
@@ -441,9 +628,9 @@ function GeoJSONLayer({
       )
 
       if (bounds?.isValid()) {
-        leafMap.fitBounds(bounds, { padding: [60, 60], maxZoom: 17 })
+        animateToBounds(leafMap, bounds, FLY_FEATURE_BOUNDS_OPTIONS)
       } else if (viewportRequest.point) {
-        leafMap.panTo([viewportRequest.point.lat, viewportRequest.point.lon], { animate: true })
+        animateToPoint(leafMap, viewportRequest.point, Math.max(leafMap.getZoom(), 15), { duration: 1.3 })
       }
 
       lastViewportRequestRef.current = viewportRequest.requestKey
@@ -453,19 +640,134 @@ function GeoJSONLayer({
     if (viewportRequest.type === 'feature' && viewportRequest.featureId) {
       const layer = featureLayersRef.current.get(viewportRequest.featureId)
       if (layer) {
-        leafMap.fitBounds(layer.getBounds(), { padding: [60, 60], maxZoom: 17 })
+        animateToBounds(leafMap, layer.getBounds(), FLY_FEATURE_BOUNDS_OPTIONS)
       } else if (viewportRequest.point) {
-        leafMap.panTo([viewportRequest.point.lat, viewportRequest.point.lon], { animate: true })
+        animateToPoint(leafMap, viewportRequest.point, Math.max(leafMap.getZoom(), 16), { duration: 1.3 })
       }
       lastViewportRequestRef.current = viewportRequest.requestKey
       return
     }
 
     if (viewportRequest.type === 'point' && viewportRequest.point) {
-      leafMap.panTo([viewportRequest.point.lat, viewportRequest.point.lon], { animate: true })
+      animateToPoint(leafMap, viewportRequest.point, Math.max(leafMap.getZoom(), 16), { duration: 1.25 })
       lastViewportRequestRef.current = viewportRequest.requestKey
     }
   }, [glebas, leafMap, viewportRequest])
+
+  return null
+}
+
+function CarReferenceLayer({
+  carGeojson,
+  selectedOverlapIds = [],
+  viewportRequest,
+}) {
+  const leafMap = useMap()
+  const featureGroupRef = useRef(null)
+  const lastDatasetKeyRef = useRef(null)
+  const lastViewportRequestRef = useRef(null)
+  const overlapIdSet = useMemo(() => new Set(selectedOverlapIds), [selectedOverlapIds])
+
+  useEffect(() => {
+    const featureGroup = L.featureGroup().addTo(leafMap)
+    featureGroupRef.current = featureGroup
+
+    return () => {
+      featureGroup.remove()
+      featureGroupRef.current = null
+    }
+  }, [leafMap])
+
+  useEffect(() => {
+    if (!featureGroupRef.current) return
+
+    const datasetKey = JSON.stringify(
+      carGeojson?.features?.map((feature) => ({
+        id: feature.properties?.id,
+        coordinates: feature.geometry,
+      })) || []
+    )
+
+    if (lastDatasetKeyRef.current === datasetKey) {
+      return
+    }
+
+    lastDatasetKeyRef.current = datasetKey
+    featureGroupRef.current.clearLayers()
+
+    if (!carGeojson?.features?.length) return
+
+    L.geoJSON(carGeojson, {
+      pane: 'car-reference',
+      style: (feature) => (
+        overlapIdSet.has(feature?.properties?.id)
+          ? CAR_REFERENCE_MATCHED_STYLE
+          : CAR_REFERENCE_STYLE
+      ),
+      onEachFeature: (feature, layer) => {
+        layer.bindPopup(carReferencePopupMarkup(feature), {
+          className: 'custom-popup',
+          maxWidth: 280,
+        })
+
+        layer.on({
+          mouseover(event) {
+            event.target.setStyle(
+              overlapIdSet.has(feature.properties?.id)
+                ? {
+                    ...CAR_REFERENCE_MATCHED_STYLE,
+                    fillOpacity: 0.28,
+                    weight: 3.5,
+                  }
+                : {
+                    ...CAR_REFERENCE_STYLE,
+                    fillOpacity: 0.14,
+                    weight: 2.8,
+                  }
+            )
+            event.target.bringToFront()
+          },
+          mouseout(event) {
+            event.target.setStyle(
+              overlapIdSet.has(feature.properties?.id)
+                ? CAR_REFERENCE_MATCHED_STYLE
+                : CAR_REFERENCE_STYLE
+            )
+          },
+        })
+
+        featureGroupRef.current?.addLayer(layer)
+      },
+    })
+  }, [carGeojson, overlapIdSet])
+
+  useEffect(() => {
+    if (!featureGroupRef.current) return
+
+    featureGroupRef.current.eachLayer((layer) => {
+      const featureId = layer.feature?.properties?.id
+      if (!featureId || typeof layer.setStyle !== 'function') return
+
+      layer.setStyle(
+        overlapIdSet.has(featureId)
+          ? CAR_REFERENCE_MATCHED_STYLE
+          : CAR_REFERENCE_STYLE
+      )
+    })
+  }, [overlapIdSet])
+
+  useEffect(() => {
+    if (!viewportRequest || viewportRequest.type !== 'car-reference' || lastViewportRequestRef.current === viewportRequest.datasetKey) {
+      return
+    }
+
+    const bounds = datasetBounds(carGeojson)
+    if (bounds?.isValid()) {
+      animateToBounds(leafMap, bounds, { maxZoom: 16, duration: 1.9 })
+    }
+
+    lastViewportRequestRef.current = viewportRequest.datasetKey
+  }, [carGeojson, leafMap, viewportRequest])
 
   return null
 }
@@ -561,10 +863,36 @@ function EditableSelectedGleba({
   const imperativePreviewRef = useRef(null)
   const dragFrameRef = useRef(null)
   const pendingDragLatLngRef = useRef(null)
+  const shouldRestorePopupRef = useRef(false)
 
   useEffect(() => {
     selectedGlebaRef.current = selectedGleba
   }, [selectedGleba])
+
+  useEffect(() => {
+    if (!shouldRestorePopupRef.current || !selectedGleba?.properties?.id) return
+
+    if (restoreFeaturePopup(leafMap, selectedGleba.properties.id)) {
+      shouldRestorePopupRef.current = false
+      return
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      if (restoreFeaturePopup(leafMap, selectedGleba.properties.id)) {
+        shouldRestorePopupRef.current = false
+      }
+    })
+    const timeoutId = setTimeout(() => {
+      if (restoreFeaturePopup(leafMap, selectedGleba.properties.id)) {
+        shouldRestorePopupRef.current = false
+      }
+    }, 120)
+
+    return () => {
+      cancelAnimationFrame(frameId)
+      clearTimeout(timeoutId)
+    }
+  }, [leafMap, selectedGleba])
 
   const removeImperativePreview = () => {
     if (dragFrameRef.current != null) {
@@ -638,27 +966,38 @@ function EditableSelectedGleba({
               if (dragFrameRef.current != null) return
               dragFrameRef.current = requestAnimationFrame(() => {
                 dragFrameRef.current = null
-                const ll = pendingDragLatLngRef.current
-                const r = dragRingRef.current
-                const lyr = imperativePreviewRef.current
-                const v = dragVertexIndexRef.current
-                if (!ll || !r || !lyr || v === null) return
-                r[v] = [ll.lng, ll.lat]
-                updateVertexDragPreviewLayers(lyr, v, r)
+              const ll = pendingDragLatLngRef.current
+              const r = dragRingRef.current
+              const lyr = imperativePreviewRef.current
+              const v = dragVertexIndexRef.current
+              if (!ll || !r || !lyr || v === null) return
+              r[v] = [ll.lng, ll.lat]
+              updateVertexDragPreviewLayers(lyr, selectedGlebaRef.current, v, r)
               })
             },
             dragstart() {
               removeImperativePreview()
+              const popupWasOpen = isFeaturePopupOpen(
+                leafMap,
+                selectedGlebaRef.current.properties.id
+              )
               const ring = getEditableCoordinates(selectedGlebaRef.current).map((c) => [...c])
               dragRingRef.current = ring
               dragVertexIndexRef.current = index
+              shouldRestorePopupRef.current = popupWasOpen
               imperativePreviewRef.current = createVertexDragPreviewLayers(
                 leafMap,
                 selectedGlebaRef.current,
                 ring,
-                index
+                index,
+                popupWasOpen
               )
-              updateVertexDragPreviewLayers(imperativePreviewRef.current, index, ring)
+              updateVertexDragPreviewLayers(
+                imperativePreviewRef.current,
+                selectedGlebaRef.current,
+                index,
+                ring
+              )
 
               leafMap.dragging.disable()
               setActiveVertexIndex(index)
@@ -736,6 +1075,7 @@ function BasemapControl({ activeBasemap, onChange }) {
 
 export default function MapView({
   glebas,
+  carReferenceDataset,
   selectedGleba,
   setSelectedGleba,
   queryPoint,
@@ -749,6 +1089,10 @@ export default function MapView({
   const [isVertexDragging, setIsVertexDragging] = useState(false)
   const [activeBasemap, setActiveBasemap] = useState('dark')
   const [satelliteSourceIndex, setSatelliteSourceIndex] = useState(0)
+  const selectedCarOverlapIds = useMemo(
+    () => selectedGleba?.properties?.carOverlapValidation?.overlaps?.map((overlap) => overlap.id).filter(Boolean) || [],
+    [selectedGleba]
+  )
 
   useEffect(() => {
     if (activeBasemap !== 'satellite') return
@@ -783,6 +1127,8 @@ export default function MapView({
         doubleClickZoom={false}
       >
         <MapInvalidateOnLayout revision={layoutRevision} />
+        <Pane name="car-reference" style={{ zIndex: 360 }} />
+        <Pane name="gleba-layer" style={{ zIndex: 460 }} />
         <Pane name="selected-vertices" style={{ zIndex: 650 }} />
 
         <BasemapControl
@@ -812,6 +1158,12 @@ export default function MapView({
           />
         )}
 
+        <CarReferenceLayer
+          carGeojson={carReferenceDataset?.geojson || null}
+          selectedOverlapIds={selectedCarOverlapIds}
+          viewportRequest={viewportRequest}
+        />
+
         <GeoJSONLayer
           glebas={glebas}
           onSelect={setSelectedGleba}
@@ -833,3 +1185,4 @@ export default function MapView({
     </div>
   )
 }
+

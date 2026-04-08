@@ -5,10 +5,11 @@ function summarizeFeature(feature) {
     status: feature.properties?.status,
     tipo_uso: feature.properties?.tipo_uso,
     origem_arquivo: feature.properties?.origem_arquivo,
+    carOverlapValidation: feature.properties?.carOverlapValidation || null,
   }
 }
 
-export function buildValidationReport({ dataset, validationResult, queryPoint, stats }) {
+export function buildValidationReport({ dataset, carReferenceDataset, validationResult, queryPoint, stats }) {
   return {
     generatedAt: new Date().toISOString(),
     dataset: dataset
@@ -18,6 +19,14 @@ export function buildValidationReport({ dataset, validationResult, queryPoint, s
           rowCount: dataset.metadata.rowCount,
           glebaCount: dataset.metadata.glebaCount,
           importedAt: dataset.metadata.importedAt,
+        }
+      : null,
+    carReferenceDataset: carReferenceDataset
+      ? {
+          fileName: carReferenceDataset.metadata.fileName,
+          sourceType: carReferenceDataset.metadata.sourceType,
+          featureCount: carReferenceDataset.metadata.glebaCount,
+          importedAt: carReferenceDataset.metadata.importedAt,
         }
       : null,
     queryPoint: queryPoint || null,

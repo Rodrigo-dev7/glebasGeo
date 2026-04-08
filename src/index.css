@@ -421,7 +421,7 @@ body.is-resizing-sidebar {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 10px;
 }
@@ -1241,7 +1241,9 @@ body.is-resizing-sidebar {
   font-size: 12px;
   font-weight: 600;
   color: var(--text);
-  word-break: break-all;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
 }
 
 .detail-mono {
@@ -1496,10 +1498,6 @@ body.is-resizing-sidebar {
   align-items: stretch;
 }
 
-.coord-actions-grid .coord-action-btn:last-child {
-  grid-column: 1 / -1;
-}
-
 .coord-action-btn {
   display: inline-flex;
   align-items: center;
@@ -1575,6 +1573,20 @@ body.is-resizing-sidebar {
   transform: translateY(-1px);
 }
 
+.coord-action-btn--secondary {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.32);
+  color: #fcd34d;
+}
+
+.coord-action-btn--secondary:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.48);
+  color: #fde68a;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.12), 0 4px 14px rgba(245, 158, 11, 0.1);
+  transform: translateY(-1px);
+}
+
 .coord-action-btn--danger {
   background: var(--red-dim);
   border-color: var(--red-border);
@@ -1609,6 +1621,10 @@ body.is-resizing-sidebar {
   outline-color: var(--red);
 }
 
+.coord-action-btn--secondary:focus-visible {
+  outline-color: var(--amber);
+}
+
 .coord-upload-label {
   font-size: 12px;
   font-weight: 700;
@@ -1640,6 +1656,222 @@ body.is-resizing-sidebar {
   padding: 5px 10px;
   font-size: 10px;
   color: #9bb7d3;
+}
+
+.coord-inline-clear {
+  border: 1px solid rgba(255, 123, 123, 0.18);
+  background: rgba(255, 123, 123, 0.08);
+  color: #fecaca;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), transform 0.12s ease;
+}
+
+.coord-inline-clear:hover {
+  background: rgba(255, 123, 123, 0.14);
+  border-color: rgba(255, 123, 123, 0.32);
+  transform: translateY(-1px);
+}
+
+.coord-inline-clear:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+
+.coord-inline-clear--ghost {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #dbe9f6;
+}
+
+.coord-inline-clear--ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.coord-car-library {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.coord-car-library__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.coord-car-library__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.coord-car-library__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #edf5fb;
+}
+
+.coord-car-library__subtitle {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #8ca2ba;
+}
+
+.coord-car-library__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.coord-car-library__body {
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    max-height 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.22s ease,
+    transform 0.22s ease;
+}
+
+.coord-car-library__body.is-expanded {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.coord-car-library__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #dbe9f6;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), transform 0.12s ease;
+}
+
+.coord-car-library__toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
+}
+
+.coord-car-library__toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.coord-car-library__toggle-icon {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.22s ease;
+}
+
+.coord-car-library__toggle[aria-expanded='false'] .coord-car-library__toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.coord-car-library__toggle-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.coord-car-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(7, 16, 29, 0.5);
+  transition: border-color var(--transition), background var(--transition), transform 0.12s ease;
+}
+
+.coord-car-card--active {
+  border-color: rgba(103, 199, 255, 0.28);
+  background: linear-gradient(180deg, rgba(103, 199, 255, 0.1), rgba(103, 199, 255, 0.04));
+  box-shadow: inset 0 0 0 1px rgba(103, 199, 255, 0.08);
+}
+
+.coord-car-card:hover {
+  transform: translateY(-1px);
+}
+
+.coord-car-card__select {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.coord-car-card__row,
+.coord-car-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.coord-car-card__name {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f4f8fd;
+  overflow-wrap: anywhere;
+}
+
+.coord-car-card__meta {
+  flex-wrap: wrap;
+}
+
+.coord-car-card__meta span {
+  font-size: 10px;
+  color: #8ca2ba;
+}
+
+.coord-car-card__badge {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 10px;
+  font-weight: 700;
+  color: #d3e3f3;
+}
+
+.coord-car-card__badge--active {
+  border-color: rgba(103, 199, 255, 0.24);
+  background: rgba(103, 199, 255, 0.12);
+  color: #b9ecff;
+}
+
+.coord-car-card__select:focus-visible,
+.coord-car-card .coord-inline-clear:focus-visible {
+  outline-offset: 2px;
 }
 
 .coord-form {
@@ -2176,6 +2408,7 @@ body.is-resizing-sidebar {
 .custom-popup .leaflet-popup-content {
   margin: 0 !important;
   width: 100% !important;
+  min-width: 0 !important;
 }
 
 .edit-vertex-icon {
@@ -2262,23 +2495,26 @@ body.is-resizing-sidebar {
 .gleba-popup {
   font-family: var(--font-display);
   color: var(--text);
+  min-width: 0;
+  width: clamp(208px, 22vw, 248px);
 }
 
 .popup-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-  padding: 14px 16px 10px;
+  gap: 12px;
+  padding: 14px 14px 11px;
   border-bottom: 1px solid var(--border);
 }
 
 .popup-nome {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.25;
   color: var(--text);
   flex: 1;
+  min-width: 0;
 }
 
 .popup-tag {
@@ -2297,7 +2533,7 @@ body.is-resizing-sidebar {
 
 .popup-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1px;
   padding: 12px 16px;
   background: var(--border);
@@ -2305,17 +2541,19 @@ body.is-resizing-sidebar {
 
 .popup-grid {
   background: none;
-  gap: 6px;
+  gap: 8px;
+  padding: 12px 14px 14px;
 }
 
 .popup-cell {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 7px 10px;
+  border-radius: 8px;
+  padding: 9px 11px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .popup-cell--full {
@@ -2325,21 +2563,40 @@ body.is-resizing-sidebar {
 .pcell-label {
   font-size: 9px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.09em;
   color: var(--text-muted);
   font-weight: 600;
+  line-height: 1.2;
 }
 
 .pcell-val {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
-  word-break: break-all;
+  line-height: 1.35;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .pcell-mono {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+}
+
+@media (max-width: 768px) {
+  .gleba-popup {
+    width: min(228px, calc(100vw - 56px));
+  }
+
+  .popup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .popup-cell--full {
+    grid-column: auto;
+  }
 }
 
 .popup-issues {
@@ -2985,11 +3242,13 @@ body {
 }
 
 .stats-grid {
-  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .stat-card {
-  padding: 18px 14px 16px;
+  min-width: 0;
+  padding: 16px 10px 14px;
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background:
@@ -3011,20 +3270,24 @@ body {
 
 .stat-card__badge {
   top: 12px;
-  right: 12px;
+  right: 10px;
   color: #70859c;
   background: rgba(255, 255, 255, 0.03);
   border-color: rgba(255, 255, 255, 0.05);
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  padding: 3px 5px;
 }
 
 .stat-card__value {
-  margin: 12px 0 10px;
+  margin: 10px 0 8px;
   font-family: var(--font-display);
-  font-size: 32px;
+  font-size: 28px;
   text-shadow: none;
 }
 
 .stat-card__label {
+  font-size: 9px;
   color: #91a6be;
 }
 
@@ -3056,8 +3319,8 @@ body {
 }
 
 .stats-area {
-  margin-top: 14px;
-  padding: 16px 18px;
+  margin-top: 10px;
+  padding: 14px 16px;
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background:
@@ -3230,6 +3493,7 @@ body {
 }
 
 .coord-action-btn--primary,
+.coord-action-btn--secondary,
 .coord-action-btn--success,
 .coord-action-btn--danger {
   color: #e6eef8;
@@ -3238,6 +3502,11 @@ body {
 .coord-action-btn--primary {
   background: linear-gradient(180deg, rgba(103, 199, 255, 0.14), rgba(103, 199, 255, 0.06));
   border-color: rgba(103, 199, 255, 0.2);
+}
+
+.coord-action-btn--secondary {
+  background: linear-gradient(180deg, rgba(240, 191, 103, 0.14), rgba(240, 191, 103, 0.06));
+  border-color: rgba(240, 191, 103, 0.18);
 }
 
 .coord-action-btn--success {
@@ -3298,6 +3567,20 @@ body {
 @container (max-width: 420px) {
   .coord-actions-grid {
     grid-template-columns: 1fr;
+  }
+
+  .coord-car-library__header,
+  .coord-car-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .coord-car-library__controls {
+    justify-content: space-between;
+  }
+
+  .coord-car-card__row {
+    align-items: flex-start;
   }
 }
 

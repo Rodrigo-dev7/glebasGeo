@@ -39,6 +39,15 @@ export default function Sidebar({
   isImporting,
   importDataset,
   clearImportedDataset,
+  carReferenceDataset,
+  carReferenceDatasets,
+  activeCarReferenceDatasetId,
+  carImportError,
+  isImportingCar,
+  importCarReferenceDataset,
+  selectCarReferenceDataset,
+  removeCarReferenceDataset,
+  clearCarReferenceDataset,
   validationResult,
   validateCoordinate,
   exportReport,
@@ -166,7 +175,6 @@ export default function Sidebar({
             <StatCard value={stats.total} label="Total" variant="total" shortLabel="Base" />
             <StatCard value={stats.validas} label="Validas" variant="valida" shortLabel="OK" />
             <StatCard value={stats.invalidas} label="Invalidas" variant="invalida" shortLabel="ER" />
-            <StatCard value={stats.pendentes} label="Pendentes" variant="pendente" shortLabel="AV" />
           </div>
 
           <div className="stats-area">
@@ -181,12 +189,21 @@ export default function Sidebar({
           <CoordinateValidationPanel
             importedDataset={importedDataset}
             importError={importError}
-            isImporting={isImporting}
-            importDataset={importDataset}
-            clearImportedDataset={clearImportedDataset}
-            validationResult={validationResult}
-            validateCoordinate={validateCoordinate}
-            exportReport={exportReport}
+          isImporting={isImporting}
+          importDataset={importDataset}
+          clearImportedDataset={clearImportedDataset}
+          carReferenceDataset={carReferenceDataset}
+          carReferenceDatasets={carReferenceDatasets}
+          activeCarReferenceDatasetId={activeCarReferenceDatasetId}
+          carImportError={carImportError}
+          isImportingCar={isImportingCar}
+          importCarReferenceDataset={importCarReferenceDataset}
+          selectCarReferenceDataset={selectCarReferenceDataset}
+          removeCarReferenceDataset={removeCarReferenceDataset}
+          clearCarReferenceDataset={clearCarReferenceDataset}
+          validationResult={validationResult}
+          validateCoordinate={validateCoordinate}
+          exportReport={exportReport}
           />
         </div>
 
