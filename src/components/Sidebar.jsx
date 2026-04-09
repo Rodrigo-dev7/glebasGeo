@@ -5,7 +5,7 @@ import CoordinateValidationPanel from './CoordinateValidationPanel'
 import GlebaAccordionList from './GlebaAccordionList'
 
 const MIN_SIDEBAR_WIDTH = 280
-const MAX_SIDEBAR_WIDTH = 520
+const MAX_SIDEBAR_WIDTH = 640
 const DEFAULT_SIDEBAR_WIDTH = 320
 const SIDEBAR_WIDTH_STORAGE_KEY = 'glebasgeo:sidebar-width'
 const RESIZE_EDGE_HITBOX = 18
