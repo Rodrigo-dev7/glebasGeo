@@ -349,7 +349,7 @@ export default function CoordinateValidationPanel({
           type="button"
           className="coord-action-btn coord-action-btn--success"
           onClick={exportReport}
-          disabled={!validationResult}
+          disabled={!importedDataset && !validationResult}
         >
           <span className="coord-action-btn__icon">
             <IconExport />

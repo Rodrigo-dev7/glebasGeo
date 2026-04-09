@@ -137,6 +137,13 @@ const FLY_FEATURE_BOUNDS_OPTIONS = {
   maxZoom: 17,
 }
 
+const PERSISTENT_POPUP_OPTIONS = {
+  className: 'custom-popup',
+  maxWidth: 280,
+  autoClose: false,
+  closeOnClick: false,
+}
+
 function animateToBounds(map, bounds, options = {}) {
   if (!bounds?.isValid()) return
   map.flyToBounds(bounds, { ...FLY_BOUNDS_OPTIONS, ...options })
@@ -152,21 +159,51 @@ function animateToPoint(map, point, zoom = null, options = {}) {
   })
 }
 
-function buildEditVertexIcon(isValid) {
+function getVisibleCoordinateIndexes({
+  coordinates = [],
+  coordinateStatuses = [],
+  pointDisplayMode = 'marked',
+}) {
+  if (!coordinates.length) return []
+
+  if (pointDisplayMode !== 'validated') {
+    return coordinates.map((_, index) => index)
+  }
+
+  const invalidIndexes = coordinateStatuses
+    .map((coordinate, index) => (!coordinate.isValid ? index : null))
+    .filter((index) => index !== null)
+
+  if (invalidIndexes.length) {
+    return invalidIndexes
+  }
+
+  if (coordinates.length === 1) {
+    return [0]
+  }
+
+  return [0, coordinates.length - 1]
+}
+
+function coordinateHasOverlapIssue(coordinate) {
+  return coordinate?.issues?.some((issue) => issue.code === 'GEOMETRIA_SOBREPOSTA')
+}
+
+function buildEditVertexIcon(isValid, hasOverlap = false) {
   return L.divIcon({
-    className: `edit-vertex-icon ${isValid ? 'is-valid' : 'is-invalid'}`,
+    className: `edit-vertex-icon ${isValid ? 'is-valid' : 'is-invalid'}${hasOverlap ? ' has-overlap' : ''}`,
     html: '<span class="edit-vertex-pin"></span>',
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
+    iconSize: hasOverlap ? [32, 32] : [26, 26],
+    iconAnchor: hasOverlap ? [16, 16] : [13, 13],
   })
 }
 
-function buildActiveEditVertexIcon(isValid) {
+function buildActiveEditVertexIcon(isValid, hasOverlap = false) {
   return L.divIcon({
-    className: `edit-vertex-icon is-active ${isValid ? 'is-valid' : 'is-invalid'}`,
+    className: `edit-vertex-icon is-active ${isValid ? 'is-valid' : 'is-invalid'}${hasOverlap ? ' has-overlap' : ''}`,
     html: '<span class="edit-vertex-pin"></span>',
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
+    iconSize: hasOverlap ? [36, 36] : [30, 30],
+    iconAnchor: hasOverlap ? [18, 18] : [15, 15],
   })
 }
 
@@ -288,10 +325,7 @@ function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, verte
     interactive: false,
   })
   poly.addTo(group)
-  poly.bindPopup(popupMarkup(selectedGleba, previewArea), {
-    className: 'custom-popup',
-    maxWidth: 280,
-  })
+  poly.bindPopup(popupMarkup(selectedGleba, previewArea), PERSISTENT_POPUP_OPTIONS)
 
   if (shouldOpenPopup) {
     poly.openPopup()
@@ -550,10 +584,7 @@ function GeoJSONLayer({
       onEachFeature: (feature, leafletLayer) => {
         const featureId = feature.properties.id
 
-        leafletLayer.bindPopup(popupMarkup(feature), {
-          className: 'custom-popup',
-          maxWidth: 280,
-        })
+        leafletLayer.bindPopup(popupMarkup(feature), PERSISTENT_POPUP_OPTIONS)
 
         leafletLayer.on({
           mouseover(event) {
@@ -705,10 +736,7 @@ function CarReferenceLayer({
           : CAR_REFERENCE_STYLE
       ),
       onEachFeature: (feature, layer) => {
-        layer.bindPopup(carReferencePopupMarkup(feature), {
-          className: 'custom-popup',
-          maxWidth: 280,
-        })
+        layer.bindPopup(carReferencePopupMarkup(feature), PERSISTENT_POPUP_OPTIONS)
 
         layer.on({
           mouseover(event) {
@@ -772,14 +800,80 @@ function CarReferenceLayer({
   return null
 }
 
-function SelectedGlebaVertices({ selectedGleba }) {
-  return <SelectedGlebaVerticesPreview selectedGleba={selectedGleba} />
+function PointPopupContent({ feature, coordinate }) {
+  return (
+    <div className="validation-popup">
+      <strong>{feature?.properties?.nome || 'Gleba'}</strong>
+      <span>Ponto {coordinate?.index || '-'}</span>
+      <span>Lat {Number.isFinite(coordinate?.lat) ? coordinate.lat.toFixed(11) : '-'}</span>
+      <span>Lon {Number.isFinite(coordinate?.lon) ? coordinate.lon.toFixed(11) : '-'}</span>
+      <span>{coordinate?.isValid ? 'Coordenada correta' : 'Coordenada com erro'}</span>
+    </div>
+  )
+}
+
+function GlebaPointMarkersLayer({
+  glebas,
+  selectedId = null,
+  visibleFeatureIds = [],
+  pointDisplayMode = 'marked',
+}) {
+  const visibleFeatureIdSet = useMemo(() => new Set(visibleFeatureIds), [visibleFeatureIds])
+
+  const featuresToRender = (glebas?.features || []).filter((feature) => {
+    const featureId = feature.properties?.id
+    if (!featureId) return false
+    if (selectedId && featureId === selectedId) return false
+    return visibleFeatureIdSet.has(featureId)
+  })
+
+  return (
+    <>
+      {featuresToRender.flatMap((feature) => {
+        const coordinateStatuses = feature.properties?.coordinateStatuses || []
+        const visibleIndexes = new Set(
+          getVisibleCoordinateIndexes({
+            coordinates: coordinateStatuses,
+            coordinateStatuses,
+            pointDisplayMode,
+          })
+        )
+
+        return coordinateStatuses
+          .map((coordinate, index) => ({ coordinate, index }))
+          .filter(({ index }) => visibleIndexes.has(index))
+          .map(({ coordinate }) => {
+            const hasOverlap = coordinateHasOverlapIssue(coordinate)
+
+            return (
+              <CircleMarker
+                key={`${feature.properties.id}-global-${coordinate.index}`}
+                center={[coordinate.lat, coordinate.lon]}
+                pane="gleba-points"
+                radius={hasOverlap ? 8 : 5}
+                pathOptions={{
+                  color: hasOverlap ? '#fdba74' : coordinate.isValid ? '#bbf7d0' : '#fecaca',
+                  weight: hasOverlap ? 3 : 2,
+                  fillColor: hasOverlap ? '#f97316' : coordinate.isValid ? '#22c55e' : '#ef4444',
+                  fillOpacity: 0.95,
+                }}
+              >
+                <Popup {...PERSISTENT_POPUP_OPTIONS}>
+                  <PointPopupContent feature={feature} coordinate={coordinate} />
+                </Popup>
+              </CircleMarker>
+            )
+          })
+      })}
+    </>
+  )
 }
 
 function SelectedGlebaVerticesPreview({
   selectedGleba,
   previewCoordinates = null,
   activeVertexIndex = null,
+  pointDisplayMode = 'marked',
 }) {
   if (!selectedGleba?.properties?.coordinateStatuses?.length) return null
 
@@ -796,6 +890,14 @@ function SelectedGlebaVerticesPreview({
         lon: previewCoordinates[index]?.[0] ?? coordinate.lon,
       }))
     : selectedGleba.properties.coordinateStatuses
+  const selfOverlapSegments = selectedGleba.properties.validationMetrics?.selfOverlapSegments || []
+  const visibleIndexes = new Set(
+    getVisibleCoordinateIndexes({
+      coordinates: coordinateStatuses,
+      coordinateStatuses,
+      pointDisplayMode,
+    })
+  )
 
   return (
     <>
@@ -821,19 +923,44 @@ function SelectedGlebaVerticesPreview({
         }}
       />
 
-      {coordinateStatuses.map((coordinate, index) => (
+      {selfOverlapSegments.map((segment, index) => (
+        <Polyline
+          key={`${selectedGleba.properties.id}-overlap-${index}`}
+          positions={segment.map(([lon, lat]) => [lat, lon])}
+          pathOptions={{
+            color: '#f97316',
+            weight: 7,
+            opacity: 0.95,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }}
+        />
+      ))}
+
+      {coordinateStatuses
+        .map((coordinate, index) => ({ coordinate, index }))
+        .filter(({ index }) => visibleIndexes.has(index))
+        .map(({ coordinate, index }) => {
+          const hasOverlap = coordinateHasOverlapIssue(coordinate)
+
+          return (
         <CircleMarker
           key={`${selectedGleba.properties.id}-${coordinate.index}`}
           center={[coordinate.lat, coordinate.lon]}
-          radius={activeVertexIndex === index ? 8 : 6}
+          pane="selected-vertices"
+          radius={
+            activeVertexIndex === index
+              ? (hasOverlap ? 11 : 8)
+              : (hasOverlap ? 9 : 6)
+          }
           pathOptions={{
-            color: coordinate.isValid ? '#bbf7d0' : '#fecaca',
-            weight: 2,
-            fillColor: coordinate.isValid ? '#22c55e' : '#ef4444',
+            color: hasOverlap ? '#fdba74' : coordinate.isValid ? '#bbf7d0' : '#fecaca',
+            weight: hasOverlap ? 3 : 2,
+            fillColor: hasOverlap ? '#f97316' : coordinate.isValid ? '#22c55e' : '#ef4444',
             fillOpacity: 1,
           }}
-        >
-          <Popup className="custom-popup">
+      >
+          <Popup {...PERSISTENT_POPUP_OPTIONS}>
             <div className="validation-popup">
               <strong>Ponto {coordinate.index}</strong>
               <span>Lat {coordinate.lat.toFixed(11)}</span>
@@ -845,7 +972,8 @@ function SelectedGlebaVerticesPreview({
             </div>
           </Popup>
         </CircleMarker>
-      ))}
+          )
+        })}
     </>
   )
 }
@@ -854,6 +982,7 @@ function EditableSelectedGleba({
   selectedGleba,
   updateSelectedGlebaCoordinates,
   onVertexEditActiveChange,
+  pointDisplayMode = 'marked',
 }) {
   const leafMap = useMap()
   const [activeVertexIndex, setActiveVertexIndex] = useState(null)
@@ -937,24 +1066,48 @@ function EditableSelectedGleba({
 
   const editableCoordinates = getEditableCoordinates(selectedGleba)
   const coordinateStatuses = selectedGleba.properties.coordinateStatuses || []
+  const visibleIndexes = new Set(
+    getVisibleCoordinateIndexes({
+      coordinates: editableCoordinates,
+      coordinateStatuses,
+      pointDisplayMode,
+    })
+  )
 
   if (!editableCoordinates.length) return null
+
+  const showEditableMarkers = pointDisplayMode !== 'validated' || activeVertexIndex !== null
 
   return (
     <>
       {activeVertexIndex === null && (
-        <SelectedGlebaVerticesPreview selectedGleba={selectedGleba} />
+        <SelectedGlebaVerticesPreview
+          selectedGleba={selectedGleba}
+          pointDisplayMode={pointDisplayMode}
+        />
       )}
 
-      {editableCoordinates.map(([lon, lat], index) => (
+      {showEditableMarkers && editableCoordinates
+        .map((coordinate, index) => ({ coordinate, index }))
+        .filter(({ index }) => visibleIndexes.has(index))
+        .map(({ coordinate, index }) => {
+          const [lon, lat] = coordinate
+
+          return (
         <Marker
           key={`${selectedGleba.properties.id}-edit-${index}`}
           position={[lat, lon]}
           draggable
           icon={
             activeVertexIndex === index
-              ? buildActiveEditVertexIcon(coordinateStatuses[index]?.isValid !== false)
-              : buildEditVertexIcon(coordinateStatuses[index]?.isValid !== false)
+              ? buildActiveEditVertexIcon(
+                coordinateStatuses[index]?.isValid !== false,
+                coordinateHasOverlapIssue(coordinateStatuses[index])
+              )
+              : buildEditVertexIcon(
+                coordinateStatuses[index]?.isValid !== false,
+                coordinateHasOverlapIssue(coordinateStatuses[index])
+              )
           }
           eventHandlers={{
             drag(event) {
@@ -1025,7 +1178,8 @@ function EditableSelectedGleba({
             },
           }}
         />
-      ))}
+          )
+        })}
     </>
   )
 }
@@ -1044,7 +1198,7 @@ function ValidationPointMarker({ queryPoint }) {
         fillOpacity: 0.95,
       }}
     >
-      <Popup className="custom-popup">
+      <Popup {...PERSISTENT_POPUP_OPTIONS}>
         <div className="validation-popup">
           <strong>Coordenada consultada</strong>
           <span>Lat {queryPoint.lat.toFixed(6)}</span>
@@ -1084,6 +1238,7 @@ export default function MapView({
   viewportRequest,
   updateSelectedGlebaCoordinates,
   layoutRevision = 0,
+  pointDisplayMode = 'marked',
 }) {
   const selectedId = selectedGleba?.properties?.id
   const [isVertexDragging, setIsVertexDragging] = useState(false)
@@ -1125,10 +1280,12 @@ export default function MapView({
         style={{ height: '100%', width: '100%' }}
         zoomControl={true}
         doubleClickZoom={false}
+        closePopupOnClick={false}
       >
         <MapInvalidateOnLayout revision={layoutRevision} />
         <Pane name="car-reference" style={{ zIndex: 360 }} />
         <Pane name="gleba-layer" style={{ zIndex: 460 }} />
+        <Pane name="gleba-points" style={{ zIndex: 620 }} />
         <Pane name="selected-vertices" style={{ zIndex: 650 }} />
 
         <BasemapControl
@@ -1174,10 +1331,18 @@ export default function MapView({
           suppressFeatureId={isVertexDragging ? selectedId : null}
         />
 
+        <GlebaPointMarkersLayer
+          glebas={glebas}
+          selectedId={selectedId}
+          visibleFeatureIds={visibleFeatureIds}
+          pointDisplayMode={pointDisplayMode}
+        />
+
         <EditableSelectedGleba
           selectedGleba={selectedGleba}
           updateSelectedGlebaCoordinates={updateSelectedGlebaCoordinates}
           onVertexEditActiveChange={setIsVertexDragging}
+          pointDisplayMode={pointDisplayMode}
         />
         <ValidationPointMarker queryPoint={queryPoint} />
         <Legend />

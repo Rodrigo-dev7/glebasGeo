@@ -33,6 +33,16 @@ function formatCoordinate(value) {
   return Number.isFinite(value) ? value.toFixed(11) : '-'
 }
 
+function formatPointLabel(index) {
+  return `P${Number(index) + 1}`
+}
+
+function formatSegmentLabel(index) {
+  const start = formatPointLabel(index)
+  const end = formatPointLabel(index + 1)
+  return `${start} -> ${end}`
+}
+
 function CoordinateTable({ coordinates = [] }) {
   if (!coordinates.length) return null
 
@@ -97,8 +107,51 @@ function CarValidationSection({ carValidation }) {
   )
 }
 
+function SelfOverlapSection({ metrics }) {
+  const repeatedVertexGroups = metrics.repeatedVertexGroups || []
+  const selfOverlapPairs = metrics.selfOverlapPairs || []
+
+  if (!repeatedVertexGroups.length && !selfOverlapPairs.length) {
+    return null
+  }
+
+  return (
+    <div className="panel-section">
+      <div className="panel-section-title panel-section-title--err">
+        Sobreposicao interna da gleba
+      </div>
+
+      <div className="details-grid">
+        <DetailRow label="Vertices repetidos" value={repeatedVertexGroups.length} />
+        <DetailRow label="Cruzamentos" value={selfOverlapPairs.length} />
+      </div>
+
+      <div className="issues-list">
+        {repeatedVertexGroups.map((group, index) => (
+          <div key={`repeat-${index}`} className="issue-card issue-card--err">
+            <span className="issue-code">Vertices coincidentes</span>
+            <p className="issue-msg">
+              {group.map((pointIndex) => formatPointLabel(pointIndex)).join(', ')}
+            </p>
+          </div>
+        ))}
+
+        {selfOverlapPairs.map((pair, index) => (
+          <div key={`pair-${index}`} className="issue-card issue-card--err">
+            <span className="issue-code">Trechos cruzados</span>
+            <p className="issue-msg">
+              {formatSegmentLabel(pair.leftSegmentIndex)} cruza {formatSegmentLabel(pair.rightSegmentIndex)}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function SummarySection({ properties, metrics }) {
   const hasCarOverlap = properties.carOverlapValidation?.status === 'overlap'
+  const hasSelfOverlap = (metrics.selfOverlapSegmentCount || 0) > 0 || (metrics.repeatedVertexIndexes?.length || 0) > 0
 
   return (
     <>
@@ -130,12 +183,16 @@ function SummarySection({ properties, metrics }) {
           <DetailRow label="Pontos informados" value={metrics.originalPointCount} />
           <DetailRow label="Pontos unicos" value={metrics.uniquePointCount} />
           <DetailRow label="Repeticoes do primeiro" value={metrics.repeatedStartCount} />
+          <DetailRow label="Vertices sobrepostos" value={metrics.repeatedVertexIndexes?.length || 0} />
+          <DetailRow label="Trechos cruzados" value={metrics.selfOverlapSegmentCount || 0} />
         </div>
       </div>
 
+      <SelfOverlapSection metrics={metrics} />
+
       <CarValidationSection carValidation={properties.carOverlapValidation} />
 
-      {!properties.errors?.length && !properties.warnings?.length && !hasCarOverlap && (
+      {!properties.errors?.length && !properties.warnings?.length && !hasCarOverlap && !hasSelfOverlap && (
         <div className="panel-ok">
           <span className="panel-ok-icon">OK</span>
           <p>Gleba validada sem criticas nas regras SICOR analisadas.</p>

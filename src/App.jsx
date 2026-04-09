@@ -16,6 +16,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isMobileSidebar, setIsMobileSidebar] = useState(false)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
+  const [pointDisplayMode, setPointDisplayMode] = useState('marked')
   const {
     glebas,
     allGlebas,
@@ -142,6 +143,8 @@ export default function App() {
             activeFilter={activeFilter}
             setActiveFilter={setActiveFilter}
             stats={stats}
+            pointDisplayMode={pointDisplayMode}
+            setPointDisplayMode={setPointDisplayMode}
           />
           <MapView
             glebas={allGlebas}
@@ -154,6 +157,7 @@ export default function App() {
             viewportRequest={mapViewportRequest}
             updateSelectedGlebaCoordinates={updateSelectedGlebaCoordinates}
             layoutRevision={isSidebarVisible}
+            pointDisplayMode={pointDisplayMode}
           />
         </main>
 

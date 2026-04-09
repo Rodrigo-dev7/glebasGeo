@@ -42,12 +42,47 @@ const FILTERS = [
   { key: 'invalida', label: 'Invalidas', icon: IconDanger, stat: 'invalidas' },
 ]
 
-export default function FilterBar({ activeFilter, setActiveFilter, stats }) {
+const POINT_DISPLAY_OPTIONS = [
+  {
+    key: 'validated',
+    label: 'Validar Pontos',
+    description: 'Mostra os pontos de validacao em todas as glebas visiveis.',
+  },
+  {
+    key: 'marked',
+    label: 'Mostrar Marcadores',
+    description: 'Mostra todos os pontos marcados das glebas visiveis.',
+  },
+]
+
+export default function FilterBar({
+  activeFilter,
+  setActiveFilter,
+  stats,
+  pointDisplayMode = 'marked',
+  setPointDisplayMode,
+}) {
   return (
     <div className="filter-bar">
       <div className="filter-bar__intro">
         <span className="filter-label">Mapa operacional</span>
         <strong className="filter-summary">Filtre a camada principal por status de validacao</strong>
+        <div className="filter-point-mode">
+          <div className="filter-point-mode__actions" role="group" aria-label="Visualizacao global dos pontos">
+            {POINT_DISPLAY_OPTIONS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                className={`filter-point-mode__button ${pointDisplayMode === option.key ? 'is-active' : ''}`}
+                onClick={() => setPointDisplayMode?.(option.key)}
+                aria-pressed={pointDisplayMode === option.key}
+                title={option.description}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="filter-pills" role="tablist" aria-label="Filtros de status">
