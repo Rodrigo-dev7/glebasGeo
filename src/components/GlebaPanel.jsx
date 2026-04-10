@@ -43,7 +43,20 @@ function formatSegmentLabel(index) {
   return `${start} -> ${end}`
 }
 
-function CoordinateTable({ coordinates = [], activeCoordinateIndex = null }) {
+function buildCoordinateReference(featureId, coordinate, displayIndex) {
+  return {
+    featureId: featureId || null,
+    displayIndex,
+    vertexIndex: coordinate?.isLast && coordinate?.isRepeatedStart ? 0 : displayIndex,
+  }
+}
+
+function CoordinateTable({
+  coordinates = [],
+  activeCoordinateIndex = null,
+  featureId = null,
+  onCoordinateActivate,
+}) {
   if (!coordinates.length) return null
 
   return (
@@ -60,7 +73,17 @@ function CoordinateTable({ coordinates = [], activeCoordinateIndex = null }) {
         {coordinates.map((coordinate, index) => (
           <div
             key={`${coordinate.index}-${coordinate.lat}-${coordinate.lon}`}
-            className={`coord-table-row ${coordinate.isValid ? 'is-valid' : 'is-invalid'}${activeCoordinateIndex === index ? ' is-active-point' : ''}`}
+            className={`coord-table-row ${coordinate.isValid ? 'is-valid' : 'is-invalid'}${activeCoordinateIndex === index ? ' is-active-point' : ''}${onCoordinateActivate ? ' is-clickable' : ''}`}
+            role={onCoordinateActivate ? 'button' : undefined}
+            tabIndex={onCoordinateActivate ? 0 : undefined}
+            onClick={onCoordinateActivate ? () => (
+              onCoordinateActivate(buildCoordinateReference(featureId, coordinate, index))
+            ) : undefined}
+            onKeyDown={onCoordinateActivate ? (event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return
+              event.preventDefault()
+              onCoordinateActivate(buildCoordinateReference(featureId, coordinate, index))
+            } : undefined}
           >
             <span className="coord-point-index">{coordinate.index}</span>
             <span className="coord-point-value">{formatCoordinate(coordinate.lat)}</span>
@@ -252,6 +275,7 @@ function CritiquesSection({ properties }) {
 export default function GlebaPanel({
   gleba,
   activeCoordinateIndex = null,
+  onActiveVertexChange,
   onClose,
   titleId,
   showTabs = false,
@@ -324,6 +348,8 @@ export default function GlebaPanel({
           <CoordinateTable
             coordinates={properties.coordinateStatuses}
             activeCoordinateIndex={activeCoordinateIndex}
+            featureId={properties.id}
+            onCoordinateActivate={onActiveVertexChange}
           />
         )}
 

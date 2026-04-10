@@ -988,6 +988,23 @@ body.is-resizing-sidebar {
     0 0 0 1px rgba(103, 199, 255, 0.08);
 }
 
+.gleba-accordion-coordinate.is-clickable {
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.gleba-accordion-coordinate.is-clickable:hover {
+  border-color: rgba(103, 199, 255, 0.32);
+}
+
+.gleba-accordion-coordinate.is-clickable:focus-visible {
+  outline: none;
+  border-color: rgba(103, 199, 255, 0.5);
+  box-shadow:
+    inset 0 0 0 1px rgba(103, 199, 255, 0.16),
+    0 0 0 2px rgba(103, 199, 255, 0.2);
+}
+
 .gleba-accordion-issue {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1445,6 +1462,23 @@ body.is-resizing-sidebar {
     linear-gradient(180deg, rgba(57, 170, 255, 0.16), rgba(57, 170, 255, 0.06)),
     rgba(16, 31, 53, 0.96);
   box-shadow: inset 0 0 0 1px rgba(103, 199, 255, 0.12);
+}
+
+.coord-table-row.is-clickable {
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.coord-table-row.is-clickable:hover {
+  border-color: rgba(103, 199, 255, 0.28);
+}
+
+.coord-table-row.is-clickable:focus-visible {
+  outline: none;
+  border-color: rgba(103, 199, 255, 0.42);
+  box-shadow:
+    inset 0 0 0 1px rgba(103, 199, 255, 0.12),
+    0 0 0 2px rgba(103, 199, 255, 0.18);
 }
 
 .coord-point-index,

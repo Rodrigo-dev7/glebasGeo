@@ -120,6 +120,7 @@ export default function App() {
           selectedGleba={selectedGleba}
           setSelectedGleba={setSelectedGleba}
           activeVertexReference={activeVertexReference}
+          onActiveVertexChange={setActiveVertexReference}
           importedDataset={importedDataset}
           importError={importError}
           isImporting={isImporting}
@@ -163,6 +164,7 @@ export default function App() {
             carReferenceDataset={carReferenceDataset}
             selectedGleba={selectedGleba}
             setSelectedGleba={setSelectedGleba}
+            activeVertexReference={activeVertexReference}
             onActiveVertexChange={setActiveVertexReference}
             queryPoint={queryPoint}
             matchedFeatureIds={matchedFeatureIds}

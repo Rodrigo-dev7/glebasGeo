@@ -10,12 +10,21 @@ function formatCoordinate(value) {
   return Number.isFinite(value) ? value.toFixed(6) : '-'
 }
 
+function buildCoordinateReference(properties, coordinate, displayIndex) {
+  return {
+    featureId: properties?.id || null,
+    displayIndex,
+    vertexIndex: coordinate?.isLast && coordinate?.isRepeatedStart ? 0 : displayIndex,
+  }
+}
+
 function GlebaAccordionCard({
   gleba,
   isExpanded,
   isSelected,
   activeCoordinateIndex = null,
   onToggle,
+  onCoordinateActivate,
 }) {
   const properties = gleba.properties || {}
   const statusMeta = STATUS_META[properties.status] || STATUS_META.pendente
@@ -82,7 +91,15 @@ function GlebaAccordionCard({
                 {coordinateStatuses.map((coordinate, index) => (
                   <div
                     key={`${properties.id}-${coordinate.index}`}
-                    className={`gleba-accordion-coordinate ${coordinate.isValid ? 'is-valid' : 'is-invalid'}${activeCoordinateIndex === index ? ' is-active-point' : ''}`}
+                    className={`gleba-accordion-coordinate ${coordinate.isValid ? 'is-valid' : 'is-invalid'}${activeCoordinateIndex === index ? ' is-active-point' : ''}${onCoordinateActivate ? ' is-clickable' : ''}`}
+                    role={onCoordinateActivate ? 'button' : undefined}
+                    tabIndex={onCoordinateActivate ? 0 : undefined}
+                    onClick={onCoordinateActivate ? () => onCoordinateActivate(coordinate, index) : undefined}
+                    onKeyDown={onCoordinateActivate ? (event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return
+                      event.preventDefault()
+                      onCoordinateActivate(coordinate, index)
+                    } : undefined}
                   >
                     <span>P{coordinate.index}</span>
                     <span>{formatCoordinate(coordinate.lat)}</span>
@@ -114,6 +131,7 @@ export default function GlebaAccordionList({
   selectedGleba,
   setSelectedGleba,
   activeVertexReference = null,
+  onActiveVertexChange,
 }) {
   const [expandedIds, setExpandedIds] = useState([])
 
@@ -151,6 +169,16 @@ export default function GlebaAccordionList({
     ))
   }
 
+  const handleCoordinateActivate = (gleba, coordinate, displayIndex) => {
+    setSelectedGleba((current) => (
+      current?.properties?.id === gleba.properties.id ? current : gleba
+    ))
+
+    onActiveVertexChange?.(
+      buildCoordinateReference(gleba.properties, coordinate, displayIndex)
+    )
+  }
+
   if (!glebas.length) {
     return (
       <div className="sidebar-hint sidebar-hint--compact">
@@ -177,10 +205,13 @@ export default function GlebaAccordionList({
             isSelected={selectedGleba?.properties?.id === gleba.properties.id}
             activeCoordinateIndex={
               activeVertexReference?.featureId === gleba.properties.id
-                ? activeVertexReference.vertexIndex
+                ? activeVertexReference.displayIndex
                 : null
             }
             onToggle={() => handleToggle(gleba)}
+            onCoordinateActivate={(coordinate, index) => (
+              handleCoordinateActivate(gleba, coordinate, index)
+            )}
           />
         ))}
       </div>
