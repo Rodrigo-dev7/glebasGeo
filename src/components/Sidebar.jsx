@@ -34,6 +34,7 @@ export default function Sidebar({
   glebas,
   selectedGleba,
   setSelectedGleba,
+  activeVertexReference,
   importedDataset,
   importError,
   isImporting,
@@ -215,6 +216,7 @@ export default function Sidebar({
               glebas={glebas?.features || []}
               selectedGleba={selectedGleba}
               setSelectedGleba={setSelectedGleba}
+              activeVertexReference={activeVertexReference}
             />
           </div>
 
@@ -225,6 +227,11 @@ export default function Sidebar({
               </div>
               <GlebaPanel
                 gleba={selectedGleba}
+                activeCoordinateIndex={
+                  activeVertexReference?.featureId === selectedGleba.properties?.id
+                    ? activeVertexReference.vertexIndex
+                    : null
+                }
                 onClose={() => {
                   setSelectedGleba(null)
                 }}

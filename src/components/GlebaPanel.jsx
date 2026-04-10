@@ -43,7 +43,7 @@ function formatSegmentLabel(index) {
   return `${start} -> ${end}`
 }
 
-function CoordinateTable({ coordinates = [] }) {
+function CoordinateTable({ coordinates = [], activeCoordinateIndex = null }) {
   if (!coordinates.length) return null
 
   return (
@@ -57,10 +57,10 @@ function CoordinateTable({ coordinates = [] }) {
           <span>Status</span>
         </div>
 
-        {coordinates.map((coordinate) => (
+        {coordinates.map((coordinate, index) => (
           <div
             key={`${coordinate.index}-${coordinate.lat}-${coordinate.lon}`}
-            className={`coord-table-row ${coordinate.isValid ? 'is-valid' : 'is-invalid'}`}
+            className={`coord-table-row ${coordinate.isValid ? 'is-valid' : 'is-invalid'}${activeCoordinateIndex === index ? ' is-active-point' : ''}`}
           >
             <span className="coord-point-index">{coordinate.index}</span>
             <span className="coord-point-value">{formatCoordinate(coordinate.lat)}</span>
@@ -251,6 +251,7 @@ function CritiquesSection({ properties }) {
 
 export default function GlebaPanel({
   gleba,
+  activeCoordinateIndex = null,
   onClose,
   titleId,
   showTabs = false,
@@ -320,7 +321,10 @@ export default function GlebaPanel({
         )}
 
         {(!showTabs || activeTab === 'coordenadas') && (
-          <CoordinateTable coordinates={properties.coordinateStatuses} />
+          <CoordinateTable
+            coordinates={properties.coordinateStatuses}
+            activeCoordinateIndex={activeCoordinateIndex}
+          />
         )}
 
         {(!showTabs || activeTab === 'criticas') && (

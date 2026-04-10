@@ -69,6 +69,16 @@ export function useGlebas() {
     [activeCarReferenceDataset]
   )
 
+  const syncValidationStateForGeojson = useCallback((geojson) => {
+    if (!queryPoint) return
+
+    const nextValidationResult = validateCoordinateAgainstDataset(queryPoint, geojson)
+    setValidationResult(nextValidationResult)
+    setMatchedFeatureIds(
+      nextValidationResult.containingFeatures.map((feature) => feature.properties.id)
+    )
+  }, [queryPoint])
+
   const syncCarValidationState = useCallback((carDataset = activeCarReferenceDataset) => {
     setImportedDataset((currentDataset) => {
       if (!currentDataset?.geojson) return currentDataset
@@ -148,6 +158,7 @@ export function useGlebas() {
       const dataset = await importDatasetFiles(normalizedFiles)
       const datasetWithCarValidation = {
         ...dataset,
+        sourceGeojson: dataset.geojson,
         geojson: applyCarValidationToDataset(dataset.geojson),
       }
 
@@ -167,6 +178,36 @@ export function useGlebas() {
       setIsImporting(false)
     }
   }, [applyCarValidationToDataset])
+
+  const resetImportedDatasetCoordinates = useCallback(() => {
+    if (!importedDataset?.sourceGeojson?.features?.length) {
+      return false
+    }
+
+    const restoredGeojson = applyCarValidationToDataset(importedDataset.sourceGeojson)
+
+    setImportedDataset((currentDataset) => (
+      currentDataset
+        ? {
+            ...currentDataset,
+            geojson: restoredGeojson,
+          }
+        : currentDataset
+    ))
+
+    setSelectedGleba((currentSelectedGleba) => {
+      if (!currentSelectedGleba?.properties?.id) {
+        return currentSelectedGleba
+      }
+
+      return restoredGeojson.features.find(
+        (feature) => feature.properties.id === currentSelectedGleba.properties.id
+      ) || null
+    })
+
+    syncValidationStateForGeojson(restoredGeojson)
+    return true
+  }, [applyCarValidationToDataset, importedDataset, syncValidationStateForGeojson])
 
   const importCarReferenceDataset = useCallback(async (file) => {
     if (!file) return
@@ -360,13 +401,7 @@ export function useGlebas() {
         : currentSelectedGleba
     ))
 
-    if (queryPoint) {
-      const optimisticValidationResult = validateCoordinateAgainstDataset(queryPoint, optimisticGeojson)
-      setValidationResult(optimisticValidationResult)
-      setMatchedFeatureIds(
-        optimisticValidationResult.containingFeatures.map((feature) => feature.properties.id)
-      )
-    }
+    syncValidationStateForGeojson(optimisticGeojson)
 
     try {
       const enrichedFeature = applyCarValidationToFeature(
@@ -388,19 +423,13 @@ export function useGlebas() {
           : currentSelectedGleba
       ))
 
-      if (queryPoint) {
-        const enrichedValidationResult = validateCoordinateAgainstDataset(queryPoint, enrichedGeojson)
-        setValidationResult(enrichedValidationResult)
-        setMatchedFeatureIds(
-          enrichedValidationResult.containingFeatures.map((feature) => feature.properties.id)
-        )
-      }
+      syncValidationStateForGeojson(enrichedGeojson)
 
       return enrichedFeature
     } catch {
       return optimisticFeature
     }
-  }, [applyCarValidationToFeature, importedDataset, queryPoint])
+  }, [applyCarValidationToFeature, importedDataset, syncValidationStateForGeojson])
 
   const updateSelectedGlebaCoordinates = useCallback(async (coordinates) => {
     if (!selectedGleba?.properties?.id) {
@@ -436,6 +465,7 @@ export function useGlebas() {
     importError,
     isImporting,
     importDataset,
+    resetImportedDatasetCoordinates,
     clearImportedDataset,
     carReferenceDataset: activeCarReferenceDataset,
     carReferenceDatasets,

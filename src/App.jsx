@@ -17,6 +17,7 @@ export default function App() {
   const [isMobileSidebar, setIsMobileSidebar] = useState(false)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [pointDisplayMode, setPointDisplayMode] = useState('marked')
+  const [activeVertexReference, setActiveVertexReference] = useState(null)
   const {
     glebas,
     allGlebas,
@@ -29,6 +30,7 @@ export default function App() {
     importError,
     isImporting,
     importDataset,
+    resetImportedDatasetCoordinates,
     clearImportedDataset,
     carReferenceDataset,
     carReferenceDatasets,
@@ -92,6 +94,14 @@ export default function App() {
     handleSidebarVisibilityChange(false)
   }
 
+  const handlePointDisplayModeChange = (nextPointDisplayMode) => {
+    resetImportedDatasetCoordinates?.()
+
+    if (nextPointDisplayMode !== pointDisplayMode) {
+      setPointDisplayMode(nextPointDisplayMode)
+    }
+  }
+
   return (
     <div className="app">
       <div className={`app-body${!isSidebarVisible ? ' app-body--sidebar-collapsed' : ''}`}>
@@ -109,6 +119,7 @@ export default function App() {
           glebas={glebas}
           selectedGleba={selectedGleba}
           setSelectedGleba={setSelectedGleba}
+          activeVertexReference={activeVertexReference}
           importedDataset={importedDataset}
           importError={importError}
           isImporting={isImporting}
@@ -145,13 +156,14 @@ export default function App() {
             setActiveFilter={setActiveFilter}
             stats={stats}
             pointDisplayMode={pointDisplayMode}
-            setPointDisplayMode={setPointDisplayMode}
+            setPointDisplayMode={handlePointDisplayModeChange}
           />
           <MapView
             glebas={allGlebas}
             carReferenceDataset={carReferenceDataset}
             selectedGleba={selectedGleba}
             setSelectedGleba={setSelectedGleba}
+            onActiveVertexChange={setActiveVertexReference}
             queryPoint={queryPoint}
             matchedFeatureIds={matchedFeatureIds}
             visibleFeatureIds={visibleFeatureIds}

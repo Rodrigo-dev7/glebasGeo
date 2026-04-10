@@ -978,6 +978,16 @@ body.is-resizing-sidebar {
   border-color: var(--red-border);
 }
 
+.gleba-accordion-coordinate.is-active-point {
+  border-color: rgba(103, 199, 255, 0.5);
+  background:
+    linear-gradient(180deg, rgba(57, 170, 255, 0.18), rgba(57, 170, 255, 0.08)),
+    rgba(17, 33, 56, 0.98);
+  box-shadow:
+    inset 0 0 0 1px rgba(103, 199, 255, 0.16),
+    0 0 0 1px rgba(103, 199, 255, 0.08);
+}
+
 .gleba-accordion-issue {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1427,6 +1437,14 @@ body.is-resizing-sidebar {
 .coord-table-row.is-invalid {
   border-color: var(--red-border);
   background: linear-gradient(180deg, rgba(239, 68, 68, 0.08), rgba(15, 31, 56, 0.95));
+}
+
+.coord-table-row.is-active-point {
+  border-color: rgba(103, 199, 255, 0.42);
+  background:
+    linear-gradient(180deg, rgba(57, 170, 255, 0.16), rgba(57, 170, 255, 0.06)),
+    rgba(16, 31, 53, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(103, 199, 255, 0.12);
 }
 
 .coord-point-index,
@@ -2515,6 +2533,20 @@ body.is-resizing-sidebar {
 .leaflet-marker-icon.edit-vertex-icon.leaflet-drag-target {
   cursor: grabbing !important;
   transform: scale(1.16);
+}
+
+.map-wrapper .leaflet-interactive.gleba-point-handle {
+  cursor: grab;
+}
+
+.map-wrapper .leaflet-interactive.gleba-edit-handle {
+  cursor: grab;
+  transition: filter var(--transition), opacity var(--transition);
+}
+
+.map-wrapper .leaflet-interactive.gleba-edit-handle:hover,
+.map-wrapper .leaflet-interactive.gleba-edit-handle.is-active {
+  filter: brightness(1.08);
 }
 
 .edit-area-preview-icon {

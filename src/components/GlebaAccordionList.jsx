@@ -10,7 +10,13 @@ function formatCoordinate(value) {
   return Number.isFinite(value) ? value.toFixed(6) : '-'
 }
 
-function GlebaAccordionCard({ gleba, isExpanded, isSelected, onToggle }) {
+function GlebaAccordionCard({
+  gleba,
+  isExpanded,
+  isSelected,
+  activeCoordinateIndex = null,
+  onToggle,
+}) {
   const properties = gleba.properties || {}
   const statusMeta = STATUS_META[properties.status] || STATUS_META.pendente
   const coordinateStatuses = properties.coordinateStatuses || []
@@ -73,10 +79,10 @@ function GlebaAccordionCard({ gleba, isExpanded, isSelected, onToggle }) {
             <div className="gleba-accordion-coordinates">
               <div className="gleba-accordion-section-title">Coordenadas</div>
               <div className="gleba-accordion-coordinate-list">
-                {coordinateStatuses.map((coordinate) => (
+                {coordinateStatuses.map((coordinate, index) => (
                   <div
                     key={`${properties.id}-${coordinate.index}`}
-                    className={`gleba-accordion-coordinate ${coordinate.isValid ? 'is-valid' : 'is-invalid'}`}
+                    className={`gleba-accordion-coordinate ${coordinate.isValid ? 'is-valid' : 'is-invalid'}${activeCoordinateIndex === index ? ' is-active-point' : ''}`}
                   >
                     <span>P{coordinate.index}</span>
                     <span>{formatCoordinate(coordinate.lat)}</span>
@@ -107,6 +113,7 @@ export default function GlebaAccordionList({
   glebas = [],
   selectedGleba,
   setSelectedGleba,
+  activeVertexReference = null,
 }) {
   const [expandedIds, setExpandedIds] = useState([])
 
@@ -118,6 +125,15 @@ export default function GlebaAccordionList({
       current.includes(selectedId) ? current : [...current, selectedId]
     ))
   }, [selectedGleba])
+
+  useEffect(() => {
+    const activeFeatureId = activeVertexReference?.featureId
+    if (!activeFeatureId) return
+
+    setExpandedIds((current) => (
+      current.includes(activeFeatureId) ? current : [...current, activeFeatureId]
+    ))
+  }, [activeVertexReference])
 
   const expandedIdSet = useMemo(() => new Set(expandedIds), [expandedIds])
 
@@ -159,6 +175,11 @@ export default function GlebaAccordionList({
             gleba={gleba}
             isExpanded={expandedIdSet.has(gleba.properties.id)}
             isSelected={selectedGleba?.properties?.id === gleba.properties.id}
+            activeCoordinateIndex={
+              activeVertexReference?.featureId === gleba.properties.id
+                ? activeVertexReference.vertexIndex
+                : null
+            }
             onToggle={() => handleToggle(gleba)}
           />
         ))}
