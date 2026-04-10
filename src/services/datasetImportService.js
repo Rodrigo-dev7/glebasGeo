@@ -2,6 +2,90 @@ import { parseExcelGeoFile } from './excelGeoService'
 import { validateSicorPolygon } from './sicorGlebaValidationService'
 import { enrichFeatureProperties } from './glebaEnrichmentService'
 
+function normalizeFileList(input) {
+  if (!input) return []
+  return Array.isArray(input) ? input.filter(Boolean) : [input]
+}
+
+function withDatasetMetadata(dataset, files) {
+  const normalizedFiles = normalizeFileList(files)
+  const fileNames = normalizedFiles.map((file) => file.name)
+  const sourceTypes = [...new Set(
+    [dataset.metadata?.sourceType].flat().filter(Boolean)
+  )]
+  const importedAt = dataset.metadata?.importedAt || new Date().toISOString()
+
+  return {
+    ...dataset,
+    metadata: {
+      ...dataset.metadata,
+      fileCount: fileNames.length || 1,
+      fileNames: fileNames.length ? fileNames : [dataset.metadata?.fileName].filter(Boolean),
+      fileName: fileNames.length > 1
+        ? `${fileNames.length} arquivos`
+        : (fileNames[0] || dataset.metadata?.fileName || 'Arquivo importado'),
+      sourceTypes,
+      sourceType: sourceTypes.length > 1 ? 'mixed' : (sourceTypes[0] || dataset.metadata?.sourceType || 'desconhecido'),
+      importedAt,
+      datasetKey: `dataset-${importedAt}`,
+    },
+  }
+}
+
+function buildUniqueFeatureId(baseId, idUsageMap) {
+  const normalizedBaseId = String(baseId || 'GLEBA').trim() || 'GLEBA'
+  const currentCount = idUsageMap.get(normalizedBaseId) || 0
+  idUsageMap.set(normalizedBaseId, currentCount + 1)
+
+  if (currentCount === 0) {
+    return normalizedBaseId
+  }
+
+  return `${normalizedBaseId} (${currentCount + 1})`
+}
+
+function mergeImportedDatasets(datasets) {
+  const idUsageMap = new Map()
+  const features = datasets.flatMap((dataset) =>
+    (dataset.geojson?.features || []).map((feature) => {
+      const originalFeatureId = feature.properties?.id || null
+      const nextFeatureId = buildUniqueFeatureId(originalFeatureId, idUsageMap)
+
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          id: nextFeatureId,
+          originalFeatureId,
+        },
+      }
+    })
+  )
+
+  const fileNames = datasets.flatMap((dataset) => dataset.metadata?.fileNames || dataset.metadata?.fileName || [])
+  const sourceTypes = [...new Set(datasets.flatMap((dataset) => dataset.metadata?.sourceTypes || dataset.metadata?.sourceType || []))]
+  const importedAt = new Date().toISOString()
+
+  return {
+    geojson: {
+      type: 'FeatureCollection',
+      features,
+    },
+    metadata: {
+      fileCount: fileNames.length,
+      fileNames,
+      fileName: `${fileNames.length} arquivos`,
+      sheetName: null,
+      rowCount: datasets.reduce((total, dataset) => total + (dataset.metadata?.rowCount || 0), 0),
+      glebaCount: features.length,
+      importedAt,
+      sourceTypes,
+      sourceType: sourceTypes.length > 1 ? 'mixed' : (sourceTypes[0] || 'desconhecido'),
+      datasetKey: `dataset-${importedAt}`,
+    },
+  }
+}
+
 function closeRingForDisplay(coordinates) {
   if (coordinates.length < 3) return coordinates
 
@@ -130,4 +214,30 @@ export async function importDatasetFile(file) {
   }
 
   throw new Error('Formato nao suportado. Use Excel (.xls/.xlsx) ou GeoJSON (.geojson/.json).')
+}
+
+export async function importDatasetFiles(files) {
+  const normalizedFiles = normalizeFileList(files)
+
+  if (!normalizedFiles.length) {
+    throw new Error('Nenhum arquivo foi selecionado.')
+  }
+
+  const importedDatasets = await Promise.all(
+    normalizedFiles.map(async (file) => {
+      try {
+        return await importDatasetFile(file)
+      } catch (error) {
+        throw new Error(`${file.name}: ${error.message || 'Nao foi possivel importar este arquivo.'}`)
+      }
+    })
+  )
+
+  if (importedDatasets.length === 1) {
+    return withDatasetMetadata(importedDatasets[0], normalizedFiles)
+  }
+
+  return mergeImportedDatasets(
+    importedDatasets.map((dataset, index) => withDatasetMetadata(dataset, normalizedFiles[index]))
+  )
 }

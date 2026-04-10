@@ -142,7 +142,10 @@ export function buildValidationReport({ dataset, carReferenceDataset, validation
     dataset: dataset
       ? {
           fileName: dataset.metadata.fileName,
+          fileNames: dataset.metadata.fileNames || [dataset.metadata.fileName].filter(Boolean),
+          fileCount: dataset.metadata.fileCount || 1,
           sourceType: dataset.metadata.sourceType,
+          sourceTypes: dataset.metadata.sourceTypes || [dataset.metadata.sourceType].filter(Boolean),
           rowCount: dataset.metadata.rowCount,
           glebaCount: dataset.metadata.glebaCount,
           importedAt: dataset.metadata.importedAt,
@@ -206,6 +209,8 @@ function buildSummarySheet(XLSX, report) {
     ['Base importada'],
     ['Campo', 'Valor'],
     ['Arquivo principal', report.dataset?.fileName || '-'],
+    ['Quantidade de arquivos', report.dataset?.fileCount ?? 0],
+    ['Arquivos carregados', report.dataset?.fileNames?.join(' | ') || report.dataset?.fileName || '-'],
     ['Formato principal', report.dataset?.sourceType || '-'],
     ['Registros importados', report.dataset?.rowCount ?? 0],
     ['Glebas importadas', report.dataset?.glebaCount ?? 0],
@@ -244,7 +249,7 @@ function buildSummarySheet(XLSX, report) {
   sheet['!merges'] = [
     { s: { r: 0, c: 0 }, e: { r: 0, c: 2 } },
     { s: { r: 2, c: 0 }, e: { r: 2, c: 2 } },
-    { s: { r: 11, c: 0 }, e: { r: 11, c: 2 } },
+    { s: { r: 13, c: 0 }, e: { r: 13, c: 2 } },
   ]
 
   const querySectionIndex = rows.findIndex((row) => row[0] === 'Consulta por coordenada')

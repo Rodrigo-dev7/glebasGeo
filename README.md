@@ -1,34 +1,46 @@
 # GlebasGEO
 
-Aplicacao web para validacao geoespacial de glebas, com visualizacao em mapa, importacao de arquivos, edicao de vertices e comparacao com imoveis do CAR em KML/KMZ.
-
-![mapa](https://github.com/user-attachments/assets/e41f043f-5ad0-441c-95a3-f67a23aa650c)
-
-
+Aplicacao web para validacao geoespacial de glebas, com mapa interativo, importacao de arquivos, edicao de vertices, cruzamento com bases CAR e exportacao de relatorio em Excel.
 
 ## Visao geral
 
-O projeto foi construido com React + Vite e usa Leaflet para renderizacao do mapa. O foco principal hoje e:
+O projeto foi construido com React + Vite e usa Leaflet para renderizacao do mapa. O fluxo principal hoje e:
 
-- importar glebas em Excel ou GeoJSON
-- validar a geometria com regras do fluxo SICOR
-- consultar coordenadas contra a base carregada
-- editar vertices da gleba diretamente no mapa
-- importar uma ou mais bases CAR em `.kml` ou `.kmz`
-- visualizar o imovel do CAR no mapa e indicar se a gleba esta dentro ou fora do CAR
-- exportar um relatorio JSON com o resultado da validacao
+1. importar glebas em Excel ou GeoJSON
+2. normalizar os dados para GeoJSON
+3. aplicar validacoes geometricas no padrao do fluxo SICOR
+4. enriquecer a gleba com area, municipio e UF
+5. comparar a gleba com uma base CAR em KML/KMZ
+6. consultar coordenadas contra a base carregada
+7. editar vertices diretamente no mapa
+8. exportar um relatorio consolidado em `.xlsx`
 
 ## Funcionalidades atuais
 
-- Mapa interativo com tema escuro e base satelite
-- Popup da gleba com area, municipio, localizacao e validacao CAR
-- Popup do CAR com numero do CAR, municipio/UF e area
-- Edicao de vertices da gleba com atualizacao de area em tempo real
-- Filtro de status por `Todas`, `Validas` e `Invalidas`
-- Biblioteca lateral de bases CAR importadas, com selecao, remocao e recolhimento
-- Deteccao de sobreposicao/interseccao entre gleba e base CAR ativa
-- Enriquecimento de municipio, UF e area da gleba
-- Exportacao de relatorio em JSON
+- Importacao de glebas em `.xls`, `.xlsx`, `.geojson` e `.json`
+- Importacao de bases CAR em `.kml` e `.kmz`
+- Mapa interativo com alternancia entre base escura e satelite
+- Lista lateral de glebas com filtros por status
+- Selecao de uma ou mais bases CAR, com escolha da base ativa
+- Validacao por coordenada informando se o ponto coincide com vertice ou cai dentro da gleba
+- Edicao de vertices no mapa com recalculo de area e reprocessamento da feature
+- Deteccao de sobreposicao interna na geometria da gleba
+- Deteccao de sobreposicao entre gleba e imoveis da base CAR ativa
+- Enriquecimento automatico de municipio, UF e area
+- Exportacao de relatorio em Excel com abas de resumo, base completa, criticas e correspondencias
+
+## Regras de validacao implementadas
+
+As validacoes principais estao concentradas no servico SICOR e cobrem:
+
+- fechamento do anel da gleba
+- repeticao excedente do primeiro ponto
+- ausencia da repeticao final obrigatoria
+- vertices repetidos
+- sobreposicao ou autointerseccao no perimetro
+- marcacao individual de coordenadas com problema
+
+O projeto tambem possui um servico legado de validacao geral para estatisticas e regras auxiliares.
 
 ## Formatos suportados
 
@@ -43,6 +55,18 @@ O projeto foi construido com React + Vite e usa Leaflet para renderizacao do map
 
 - `.kml`
 - `.kmz`
+
+### Saida
+
+- `.xlsx`
+
+## Stack
+
+- React 18
+- Vite 5
+- Leaflet
+- React Leaflet
+- xlsx
 
 ## Como executar
 
@@ -72,16 +96,35 @@ npm run build
 npm run preview
 ```
 
-## Fluxo de uso
+## Fluxo tecnico
 
-1. Importe a gleba em Excel ou GeoJSON.
-2. Visualize as glebas no mapa e selecione uma delas.
-3. Se quiser, edite os vertices diretamente no mapa.
-4. Importe uma base CAR em KML/KMZ.
-5. Se houver mais de uma base CAR, escolha qual delas fica ativa.
-6. Clique na gleba ou no imovel do CAR para ver os popups.
-7. Use a consulta de coordenadas para verificar se um ponto cai dentro de alguma gleba.
-8. Exporte o relatorio JSON quando necessario.
+### 1. Importacao da base principal
+
+- Excel: lido e agrupado por gleba em `src/services/excelGeoService.js`
+- GeoJSON: normalizado em `src/services/datasetImportService.js`
+
+### 2. Validacao geometrica
+
+- As features passam por `src/services/sicorGlebaValidationService.js`
+- Cada gleba recebe `status`, `errors`, `warnings`, `coordinateStatuses` e metricas
+
+### 3. Enriquecimento geografico
+
+- A area e calculada em hectares
+- Municipio e UF podem vir do proprio arquivo, de bases auxiliares locais ou de lookup complementar
+
+### 4. Analise CAR
+
+- Bases KML/KMZ sao convertidas para GeoJSON em `src/services/kmlGeoService.js`
+- A sobreposicao com CAR ativo e aplicada em `src/services/carOverlapValidationService.js`
+
+### 5. Consulta por coordenada
+
+- O ponto informado e comparado com vertices e area da gleba em `src/services/coordinateValidationService.js`
+
+### 6. Exportacao
+
+- O relatorio final e gerado em Excel por `src/services/reportService.js`
 
 ## Estrutura principal
 
@@ -118,43 +161,40 @@ src/
 public/
   base-geoserver-municipios-index.json
 Base-GeoServer/
-  bases auxiliares locais
+  bases auxiliares locais em shapefile
 ```
 
-## Principais arquivos
+## Arquivos mais importantes
 
-- `src/hooks/useGlebas.js`: estado central da aplicacao, importacao, filtros, viewport e selecao do CAR ativo
-- `src/components/MapView.jsx`: mapa, popups, camadas, animacoes e edicao de vertices
-- `src/components/CoordinateValidationPanel.jsx`: importacao de arquivos, biblioteca CAR e validacao por coordenada
-- `src/services/datasetImportService.js`: pipeline de importacao de glebas
-- `src/services/excelGeoService.js`: leitura e agrupamento de planilhas
+- `src/App.jsx`: composicao principal da aplicacao
+- `src/hooks/useGlebas.js`: estado central, importacoes, filtros, viewport, validacao por coordenada e exportacao
+- `src/components/MapView.jsx`: mapa, camadas, popups, pontos e edicao de vertices
+- `src/components/CoordinateValidationPanel.jsx`: importacao de arquivos, biblioteca CAR e formulario de consulta
+- `src/services/datasetImportService.js`: pipeline de entrada da base principal
+- `src/services/excelGeoService.js`: leitura de planilhas e agrupamento das glebas
 - `src/services/kmlGeoService.js`: leitura de KML/KMZ do CAR
-- `src/services/carOverlapValidationService.js`: comparacao entre gleba e base CAR
-- `src/services/sicorGlebaValidationService.js`: regras geometricas do fluxo SICOR
-- `src/services/reportService.js`: geracao e download do relatorio JSON
+- `src/services/sicorGlebaValidationService.js`: validacao geometrica da gleba
+- `src/services/carOverlapValidationService.js`: cruzamento entre gleba e base CAR ativa
+- `src/services/reportService.js`: geracao do relatorio em Excel
 
-## Stack atual
+## Dados auxiliares
 
-- React 18
-- Vite 5
-- Leaflet
-- React Leaflet
-- xlsx
+O projeto usa dados locais de apoio geografico:
 
-## Dados e apoio geografico
+- `src/data/municipios-uf.json`
+- `src/data/ibge-municipios.json`
+- `public/base-geoserver-municipios-index.json`
+- arquivos em `Base-GeoServer/`
 
-O projeto usa dados locais para apoio de enriquecimento e referencia geografica, incluindo:
-
-- bases em `Base-GeoServer/`
-- indice em `public/base-geoserver-municipios-index.json`
-- arquivos auxiliares em `src/data/`
+Esses arquivos apoiam o enriquecimento de municipio e UF e a organizacao das bases locais usadas no projeto.
 
 ## Limitacoes atuais
 
-- Nao ha testes automatizados no repositorio neste momento.
-- O status `Pendente` foi removido da interface principal e nao faz parte do fluxo atual de uso.
-- A validacao CAR exibida no popup da gleba esta orientada ao criterio solicitado no projeto: `Gleba dentro do CAR` ou `Gleba fora do CAR`.
-- O build atualmente gera aviso de chunk grande no bundle final do Vite, mas compila normalmente.
+- Nao ha testes automatizados no repositorio neste momento
+- O bundle de producao gera alerta de chunk grande no Vite, mas a compilacao conclui normalmente
+- Parte da logica de mapa esta concentrada em `MapView.jsx`, que hoje mistura renderizacao e comportamento imperativo do Leaflet
+- O servico `validationService.js` parece legado em relacao ao fluxo principal baseado em `sicorGlebaValidationService.js`
+- O lookup administrativo pode depender de bases locais e, em alguns cenarios, de consulta complementar
 
 ## Scripts disponiveis
 
@@ -168,12 +208,11 @@ O projeto usa dados locais para apoio de enriquecimento e referencia geografica,
 
 ## Arquivos de exemplo no repositorio
 
-O repositorio contem alguns arquivos de apoio e amostras locais, como:
-
 - `TESTE_1_COM ERROS.xls`
 - `TESTE_2_COM ERROS.xls`
 - `TESTE_3_SEM ERROS.xls`
 - `TESTE_4_SEM ERROS.xls`
+- `Glebas teste com sobreposição.xlsx`
 - `Area_do_Imovel.shp.kmz`
 
-Eles podem ser usados para testes manuais durante o desenvolvimento.
+Esses arquivos podem ser usados para testes manuais durante o desenvolvimento.

@@ -5,7 +5,7 @@
  */
 import { useCallback, useMemo, useState } from 'react'
 import { getStats } from '../services/validationService'
-import { importDatasetFile } from '../services/datasetImportService'
+import { importDatasetFiles } from '../services/datasetImportService'
 import { validateCoordinateAgainstDataset } from '../services/coordinateValidationService'
 import { buildValidationReport, downloadValidationReport } from '../services/reportService'
 import { parseCarReferenceFile } from '../services/kmlGeoService'
@@ -25,6 +25,14 @@ const EMPTY_DATASET = {
 
 function createCarDatasetId(dataset) {
   return `${dataset.metadata.fileName}-${dataset.metadata.importedAt}`
+}
+
+function createImportedDatasetViewportKey(dataset) {
+  if (!dataset?.metadata) {
+    return `dataset-${Date.now()}`
+  }
+
+  return dataset.metadata.datasetKey || `${dataset.metadata.fileName}-${dataset.metadata.importedAt}`
 }
 
 export function useGlebas() {
@@ -129,14 +137,15 @@ export function useGlebas() {
     })
   }, [])
 
-  const importDataset = useCallback(async (file) => {
-    if (!file) return
+  const importDataset = useCallback(async (files) => {
+    const normalizedFiles = Array.isArray(files) ? files.filter(Boolean) : [files].filter(Boolean)
+    if (!normalizedFiles.length) return
 
     setIsImporting(true)
     setImportError('')
 
     try {
-      const dataset = await importDatasetFile(file)
+      const dataset = await importDatasetFiles(normalizedFiles)
       const datasetWithCarValidation = {
         ...dataset,
         geojson: applyCarValidationToDataset(dataset.geojson),
@@ -150,10 +159,10 @@ export function useGlebas() {
       setMatchedFeatureIds([])
       setMapViewportRequest({
         type: 'dataset',
-        datasetKey: `${datasetWithCarValidation.metadata.fileName}-${datasetWithCarValidation.metadata.importedAt}`,
+        datasetKey: createImportedDatasetViewportKey(datasetWithCarValidation),
       })
     } catch (error) {
-      setImportError(error.message || 'Nao foi possivel processar o arquivo informado.')
+      setImportError(error.message || 'Nao foi possivel processar o(s) arquivo(s) informado(s).')
     } finally {
       setIsImporting(false)
     }
@@ -224,7 +233,7 @@ export function useGlebas() {
     if (importedDataset?.geojson?.features?.length) {
       setMapViewportRequest({
         type: 'dataset',
-        datasetKey: `${importedDataset.metadata.fileName}-${Date.now()}`,
+        datasetKey: `${createImportedDatasetViewportKey(importedDataset)}-${Date.now()}`,
       })
       return
     }
@@ -250,7 +259,7 @@ export function useGlebas() {
     if (importedDataset?.geojson?.features?.length) {
       setMapViewportRequest({
         type: 'dataset',
-        datasetKey: `${importedDataset.metadata.fileName}-${Date.now()}`,
+        datasetKey: `${createImportedDatasetViewportKey(importedDataset)}-${Date.now()}`,
       })
       return
     }
@@ -312,8 +321,16 @@ export function useGlebas() {
     return result
   }, [activeDataset, filteredFeatureIds])
 
-  const updateSelectedGlebaCoordinates = useCallback(async (coordinates) => {
-    if (!selectedGleba?.properties?.id || !importedDataset?.geojson?.features?.length) {
+  const updateFeatureCoordinates = useCallback(async (featureId, coordinates, options = {}) => {
+    if (!featureId || !importedDataset?.geojson?.features?.length) {
+      return null
+    }
+
+    const featureToUpdate = importedDataset.geojson.features.find(
+      (feature) => feature.properties?.id === featureId
+    )
+
+    if (!featureToUpdate) {
       return null
     }
 
@@ -325,7 +342,7 @@ export function useGlebas() {
     })
 
     const optimisticFeature = applyCarValidationToFeature(
-      buildFeatureWithCoordinatesPreview(selectedGleba, coordinates)
+      buildFeatureWithCoordinatesPreview(featureToUpdate, coordinates)
     )
     const optimisticGeojson = replaceFeature(importedDataset.geojson, optimisticFeature)
 
@@ -337,7 +354,11 @@ export function useGlebas() {
           }
         : currentDataset
     ))
-    setSelectedGleba(optimisticFeature)
+    setSelectedGleba((currentSelectedGleba) => (
+      currentSelectedGleba?.properties?.id === optimisticFeature.properties.id || options.select
+        ? optimisticFeature
+        : currentSelectedGleba
+    ))
 
     if (queryPoint) {
       const optimisticValidationResult = validateCoordinateAgainstDataset(queryPoint, optimisticGeojson)
@@ -362,7 +383,7 @@ export function useGlebas() {
           : currentDataset
       ))
       setSelectedGleba((currentSelectedGleba) => (
-        currentSelectedGleba?.properties?.id === enrichedFeature.properties.id
+        currentSelectedGleba?.properties?.id === enrichedFeature.properties.id || options.select
           ? enrichedFeature
           : currentSelectedGleba
       ))
@@ -379,7 +400,15 @@ export function useGlebas() {
     } catch {
       return optimisticFeature
     }
-  }, [applyCarValidationToFeature, importedDataset, queryPoint, selectedGleba])
+  }, [applyCarValidationToFeature, importedDataset, queryPoint])
+
+  const updateSelectedGlebaCoordinates = useCallback(async (coordinates) => {
+    if (!selectedGleba?.properties?.id) {
+      return null
+    }
+
+    return updateFeatureCoordinates(selectedGleba.properties.id, coordinates, { select: true })
+  }, [selectedGleba, updateFeatureCoordinates])
 
   const exportReport = useCallback(() => {
     const report = buildValidationReport({
@@ -423,6 +452,7 @@ export function useGlebas() {
     exportReport,
     matchedFeatureIds,
     mapViewportRequest,
+    updateFeatureCoordinates,
     updateSelectedGlebaCoordinates,
   }
 }

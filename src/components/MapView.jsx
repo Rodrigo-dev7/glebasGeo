@@ -2,7 +2,7 @@
  * MapView.jsx
  * Mapa interativo com poligonos, vertices e destaque das criticas SICOR.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CircleMarker, MapContainer, Marker, Pane, Polyline, Popup, TileLayer, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import Legend from './Legend'
@@ -170,19 +170,19 @@ function getVisibleCoordinateIndexes({
     return coordinates.map((_, index) => index)
   }
 
-  const invalidIndexes = coordinateStatuses
-    .map((coordinate, index) => (!coordinate.isValid ? index : null))
-    .filter((index) => index !== null)
-
-  if (invalidIndexes.length) {
-    return invalidIndexes
-  }
-
   if (coordinates.length === 1) {
     return [0]
   }
 
-  return [0, coordinates.length - 1]
+  const visibleIndexes = new Set([0, coordinates.length - 1])
+
+  coordinateStatuses.forEach((coordinate, index) => {
+    if (coordinate?.isValid === false) {
+      visibleIndexes.add(index)
+    }
+  })
+
+  return [...visibleIndexes].sort((left, right) => left - right)
 }
 
 function coordinateHasOverlapIssue(coordinate) {
@@ -204,20 +204,6 @@ function buildActiveEditVertexIcon(isValid, hasOverlap = false) {
     html: '<span class="edit-vertex-pin"></span>',
     iconSize: hasOverlap ? [36, 36] : [30, 30],
     iconAnchor: hasOverlap ? [18, 18] : [15, 15],
-  })
-}
-
-function buildAreaPreviewIcon(area) {
-  return L.divIcon({
-    className: 'edit-area-preview-icon',
-    html: `
-      <div class="edit-area-preview">
-        <span class="edit-area-preview-label">Area atual</span>
-        <strong class="edit-area-preview-value">${formatArea(area)}</strong>
-      </div>
-    `,
-    iconSize: [110, 54],
-    iconAnchor: [55, 66],
   })
 }
 
@@ -263,49 +249,10 @@ function resolvePopupArea(feature, areaOverride = null) {
     : feature?.properties?.area
 }
 
-function updateAreaPreviewMarkerText(marker, area) {
-  const root = marker.getElement?.()
-  const val = root?.querySelector?.('.edit-area-preview-value')
-  if (val) val.textContent = formatArea(area)
-}
-
-function isFeaturePopupOpen(leafMap, featureId) {
-  let isOpen = false
-
-  leafMap.eachLayer((layer) => {
-    if (isOpen) return
-    if (layer.feature?.properties?.id !== featureId) return
-
-    const popup = layer.getPopup?.()
-    if (popup && leafMap.hasLayer(popup)) {
-      isOpen = true
-    }
-  })
-
-  return isOpen
-}
-
-function restoreFeaturePopup(leafMap, featureId) {
-  let restored = false
-
-  leafMap.eachLayer((layer) => {
-    if (restored) return
-    if (layer.feature?.properties?.id !== featureId) return
-
-    if (typeof layer.openPopup === 'function') {
-      layer.openPopup()
-      restored = true
-    }
-  })
-
-  return restored
-}
-
-function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, vertexIndex, shouldOpenPopup = false) {
+function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, vertexIndex) {
   const group = L.layerGroup().addTo(leafMap)
   const style = STATUS_STYLES[selectedGleba.properties.status] || STATUS_STYLES.pendente
   const ll = ringLonLat.map(([lon, lat]) => [lat, lon])
-  const previewArea = calculatePolygonAreaHectares(ringLonLat)
 
   if (selectedGleba.properties.status === 'invalida' && selectedGleba.properties.originalCoordinates?.length > 1) {
     L.polyline(
@@ -314,22 +261,15 @@ function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, verte
     ).addTo(group)
   }
 
-  const poly = L.polygon(ll, {
+  const shape = L.polyline([...ll, ll[0]], {
     color: style.color,
-    fillColor: style.fillColor,
-    weight: 2.5,
-    opacity: 0.92,
-    fillOpacity: 0.4,
+    weight: 2.75,
+    opacity: 0.96,
     lineCap: 'round',
     lineJoin: 'round',
     interactive: false,
   })
-  poly.addTo(group)
-  poly.bindPopup(popupMarkup(selectedGleba, previewArea), PERSISTENT_POPUP_OPTIONS)
-
-  if (shouldOpenPopup) {
-    poly.openPopup()
-  }
+  shape.addTo(group)
 
   const outline = L.polyline([...ll, ll[0]], {
     color: '#f8fafc',
@@ -340,14 +280,6 @@ function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, verte
   })
   outline.addTo(group)
 
-  const vertexLL = [ringLonLat[vertexIndex][1], ringLonLat[vertexIndex][0]]
-  const areaMarker = L.marker(vertexLL, {
-    icon: buildAreaPreviewIcon(calculatePolygonAreaHectares(ringLonLat)),
-    interactive: false,
-    keyboard: false,
-  })
-  areaMarker.addTo(group)
-
   const helperLine = L.polyline([], {
     color: '#f8fafc',
     weight: 3,
@@ -357,15 +289,14 @@ function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, verte
   })
   helperLine.addTo(group)
 
-  return { group, poly, outline, areaMarker, helperLine }
+  return { group, shape, outline, helperLine }
 }
 
 function updateVertexDragPreviewLayers(layers, selectedGleba, vertexIndex, ringLonLat) {
   if (!layers) return
 
-  const area = calculatePolygonAreaHectares(ringLonLat)
   const ll = ringLonLat.map(([lon, lat]) => [lat, lon])
-  layers.poly.setLatLngs(ll)
+  layers.shape.setLatLngs([...ll, ll[0]])
   layers.outline.setLatLngs([...ll, ll[0]])
   const n = ringLonLat.length
   if (n > 2) {
@@ -379,9 +310,6 @@ function updateVertexDragPreviewLayers(layers, selectedGleba, vertexIndex, ringL
   } else {
     layers.helperLine.setLatLngs([])
   }
-  layers.areaMarker.setLatLng([ringLonLat[vertexIndex][1], ringLonLat[vertexIndex][0]])
-  updateAreaPreviewMarkerText(layers.areaMarker, area)
-  layers.poly.getPopup?.()?.setContent(popupMarkup(selectedGleba, area))
 }
 
 function popupMarkup(feature, areaOverride = null) {
@@ -817,8 +745,107 @@ function GlebaPointMarkersLayer({
   selectedId = null,
   visibleFeatureIds = [],
   pointDisplayMode = 'marked',
+  onPointSelect,
+  onDragStateChange,
+  updateFeatureCoordinates,
 }) {
+  const leafMap = useMap()
   const visibleFeatureIdSet = useMemo(() => new Set(visibleFeatureIds), [visibleFeatureIds])
+  const dragSessionRef = useRef(null)
+  const dragFrameRef = useRef(null)
+  const pendingDragLatLngRef = useRef(null)
+
+  const clearDragSession = useCallback(() => {
+    if (dragFrameRef.current != null) {
+      cancelAnimationFrame(dragFrameRef.current)
+      dragFrameRef.current = null
+    }
+
+    pendingDragLatLngRef.current = null
+
+    const currentSession = dragSessionRef.current
+    if (currentSession?.preview) {
+      currentSession.preview.group.remove()
+    }
+
+    leafMap.off('mousemove', handleMapMouseMove)
+    leafMap.off('mouseup', handleMapMouseUp)
+    window.removeEventListener('mouseup', handleWindowMouseUp)
+    leafMap.dragging.enable()
+    dragSessionRef.current = null
+  }, [leafMap])
+
+  const handleMapMouseMove = useCallback((event) => {
+    const currentSession = dragSessionRef.current
+    if (!currentSession) return
+
+    if (!currentSession.didMove) {
+      const startPoint = leafMap.latLngToContainerPoint(currentSession.startLatLng)
+      const currentPoint = leafMap.latLngToContainerPoint(event.latlng)
+
+      if (startPoint.distanceTo(currentPoint) < 3) {
+        return
+      }
+
+      currentSession.didMove = true
+      currentSession.preview = createVertexDragPreviewLayers(
+        leafMap,
+        currentSession.feature,
+        currentSession.ring,
+        currentSession.vertexIndex
+      )
+      onDragStateChange?.(true)
+    }
+
+    pendingDragLatLngRef.current = event.latlng
+    if (dragFrameRef.current != null) return
+
+    dragFrameRef.current = requestAnimationFrame(() => {
+      dragFrameRef.current = null
+
+      const session = dragSessionRef.current
+      const nextLatLng = pendingDragLatLngRef.current
+
+      if (!session?.didMove || !session.preview || !nextLatLng) return
+
+      session.ring[session.vertexIndex] = [nextLatLng.lng, nextLatLng.lat]
+      updateVertexDragPreviewLayers(
+        session.preview,
+        session.feature,
+        session.vertexIndex,
+        session.ring
+      )
+    })
+  }, [leafMap, onDragStateChange])
+
+  const finishDragSession = useCallback(async () => {
+    const currentSession = dragSessionRef.current
+    const finalRing = currentSession?.didMove
+      ? currentSession.ring.map((coordinate) => [...coordinate])
+      : null
+
+    clearDragSession()
+    onDragStateChange?.(false)
+
+    if (!currentSession?.feature?.properties?.id || !finalRing) {
+      return
+    }
+
+    await updateFeatureCoordinates?.(currentSession.feature.properties.id, finalRing, { select: true })
+  }, [clearDragSession, onDragStateChange, updateFeatureCoordinates])
+
+  const handleMapMouseUp = useCallback(() => {
+    finishDragSession()
+  }, [finishDragSession])
+
+  const handleWindowMouseUp = useCallback(() => {
+    finishDragSession()
+  }, [finishDragSession])
+
+  useEffect(() => () => {
+    clearDragSession()
+    onDragStateChange?.(false)
+  }, [clearDragSession, onDragStateChange])
 
   const featuresToRender = (glebas?.features || []).filter((feature) => {
     const featureId = feature.properties?.id
@@ -842,7 +869,7 @@ function GlebaPointMarkersLayer({
         return coordinateStatuses
           .map((coordinate, index) => ({ coordinate, index }))
           .filter(({ index }) => visibleIndexes.has(index))
-          .map(({ coordinate }) => {
+          .map(({ coordinate, index }) => {
             const hasOverlap = coordinateHasOverlapIssue(coordinate)
 
             return (
@@ -856,6 +883,30 @@ function GlebaPointMarkersLayer({
                   weight: hasOverlap ? 3 : 2,
                   fillColor: hasOverlap ? '#f97316' : coordinate.isValid ? '#22c55e' : '#ef4444',
                   fillOpacity: 0.95,
+                }}
+                eventHandlers={{
+                  mousedown(event) {
+                    clearDragSession()
+                    L.DomEvent.stop(event.originalEvent)
+                    onPointSelect?.(feature, index)
+
+                    dragSessionRef.current = {
+                      didMove: false,
+                      feature,
+                      ring: getEditableCoordinates(feature).map((currentCoordinate) => [...currentCoordinate]),
+                      startLatLng: event.latlng,
+                      vertexIndex: index,
+                      preview: null,
+                    }
+
+                    leafMap.dragging.disable()
+                    leafMap.on('mousemove', handleMapMouseMove)
+                    leafMap.on('mouseup', handleMapMouseUp)
+                    window.addEventListener('mouseup', handleWindowMouseUp)
+                  },
+                  click() {
+                    onPointSelect?.(feature, index)
+                  },
                 }}
               >
                 <Popup {...PERSISTENT_POPUP_OPTIONS}>
@@ -874,6 +925,7 @@ function SelectedGlebaVerticesPreview({
   previewCoordinates = null,
   activeVertexIndex = null,
   pointDisplayMode = 'marked',
+  showPointMarkers = true,
 }) {
   if (!selectedGleba?.properties?.coordinateStatuses?.length) return null
 
@@ -937,7 +989,7 @@ function SelectedGlebaVerticesPreview({
         />
       ))}
 
-      {coordinateStatuses
+      {showPointMarkers && coordinateStatuses
         .map((coordinate, index) => ({ coordinate, index }))
         .filter(({ index }) => visibleIndexes.has(index))
         .map(({ coordinate, index }) => {
@@ -983,6 +1035,8 @@ function EditableSelectedGleba({
   updateSelectedGlebaCoordinates,
   onVertexEditActiveChange,
   pointDisplayMode = 'marked',
+  requestedVertexActivation = null,
+  onRequestedVertexActivationApplied,
 }) {
   const leafMap = useMap()
   const [activeVertexIndex, setActiveVertexIndex] = useState(null)
@@ -992,36 +1046,36 @@ function EditableSelectedGleba({
   const imperativePreviewRef = useRef(null)
   const dragFrameRef = useRef(null)
   const pendingDragLatLngRef = useRef(null)
-  const shouldRestorePopupRef = useRef(false)
 
   useEffect(() => {
     selectedGlebaRef.current = selectedGleba
   }, [selectedGleba])
 
   useEffect(() => {
-    if (!shouldRestorePopupRef.current || !selectedGleba?.properties?.id) return
+    setActiveVertexIndex(null)
+  }, [selectedGleba?.properties?.id])
 
-    if (restoreFeaturePopup(leafMap, selectedGleba.properties.id)) {
-      shouldRestorePopupRef.current = false
-      return
+  useEffect(() => {
+    if (!requestedVertexActivation || !selectedGleba?.properties?.id) return
+    if (requestedVertexActivation.featureId !== selectedGleba.properties.id) return
+
+    const editableCoordinates = getEditableCoordinates(selectedGleba)
+    const nextVertexIndex = requestedVertexActivation.vertexIndex
+
+    if (
+      Number.isInteger(nextVertexIndex) &&
+      nextVertexIndex >= 0 &&
+      nextVertexIndex < editableCoordinates.length
+    ) {
+      setActiveVertexIndex(nextVertexIndex)
     }
 
-    const frameId = requestAnimationFrame(() => {
-      if (restoreFeaturePopup(leafMap, selectedGleba.properties.id)) {
-        shouldRestorePopupRef.current = false
-      }
-    })
-    const timeoutId = setTimeout(() => {
-      if (restoreFeaturePopup(leafMap, selectedGleba.properties.id)) {
-        shouldRestorePopupRef.current = false
-      }
-    }, 120)
-
-    return () => {
-      cancelAnimationFrame(frameId)
-      clearTimeout(timeoutId)
-    }
-  }, [leafMap, selectedGleba])
+    onRequestedVertexActivationApplied?.(requestedVertexActivation.requestKey)
+  }, [
+    onRequestedVertexActivationApplied,
+    requestedVertexActivation,
+    selectedGleba,
+  ])
 
   const removeImperativePreview = () => {
     if (dragFrameRef.current != null) {
@@ -1076,7 +1130,7 @@ function EditableSelectedGleba({
 
   if (!editableCoordinates.length) return null
 
-  const showEditableMarkers = pointDisplayMode !== 'validated' || activeVertexIndex !== null
+  const showEditableMarkers = true
 
   return (
     <>
@@ -1084,6 +1138,7 @@ function EditableSelectedGleba({
         <SelectedGlebaVerticesPreview
           selectedGleba={selectedGleba}
           pointDisplayMode={pointDisplayMode}
+          showPointMarkers={!showEditableMarkers}
         />
       )}
 
@@ -1110,6 +1165,11 @@ function EditableSelectedGleba({
               )
           }
           eventHandlers={{
+            click() {
+              setActiveVertexIndex((currentActiveVertexIndex) => (
+                currentActiveVertexIndex === index ? null : index
+              ))
+            },
             drag(event) {
               const ring = dragRingRef.current
               const layers = imperativePreviewRef.current
@@ -1130,20 +1190,14 @@ function EditableSelectedGleba({
             },
             dragstart() {
               removeImperativePreview()
-              const popupWasOpen = isFeaturePopupOpen(
-                leafMap,
-                selectedGlebaRef.current.properties.id
-              )
               const ring = getEditableCoordinates(selectedGlebaRef.current).map((c) => [...c])
               dragRingRef.current = ring
               dragVertexIndexRef.current = index
-              shouldRestorePopupRef.current = popupWasOpen
               imperativePreviewRef.current = createVertexDragPreviewLayers(
                 leafMap,
                 selectedGlebaRef.current,
                 ring,
-                index,
-                popupWasOpen
+                index
               )
               updateVertexDragPreviewLayers(
                 imperativePreviewRef.current,
@@ -1236,6 +1290,7 @@ export default function MapView({
   matchedFeatureIds = [],
   visibleFeatureIds = [],
   viewportRequest,
+  updateFeatureCoordinates,
   updateSelectedGlebaCoordinates,
   layoutRevision = 0,
   pointDisplayMode = 'marked',
@@ -1244,10 +1299,32 @@ export default function MapView({
   const [isVertexDragging, setIsVertexDragging] = useState(false)
   const [activeBasemap, setActiveBasemap] = useState('dark')
   const [satelliteSourceIndex, setSatelliteSourceIndex] = useState(0)
+  const [requestedVertexActivation, setRequestedVertexActivation] = useState(null)
   const selectedCarOverlapIds = useMemo(
     () => selectedGleba?.properties?.carOverlapValidation?.overlaps?.map((overlap) => overlap.id).filter(Boolean) || [],
     [selectedGleba]
   )
+
+  const handlePointMarkerSelect = useCallback((feature, vertexIndex) => {
+    setSelectedGleba(feature)
+
+    if (!feature?.properties?.id || !Number.isInteger(vertexIndex)) {
+      setRequestedVertexActivation(null)
+      return
+    }
+
+    setRequestedVertexActivation({
+      featureId: feature.properties.id,
+      vertexIndex,
+      requestKey: `${feature.properties.id}-${vertexIndex}-${Date.now()}`,
+    })
+  }, [setSelectedGleba])
+
+  const handleRequestedVertexActivationApplied = useCallback((requestKey) => {
+    setRequestedVertexActivation((currentRequest) => (
+      currentRequest?.requestKey === requestKey ? null : currentRequest
+    ))
+  }, [])
 
   useEffect(() => {
     if (activeBasemap !== 'satellite') return
@@ -1336,6 +1413,9 @@ export default function MapView({
           selectedId={selectedId}
           visibleFeatureIds={visibleFeatureIds}
           pointDisplayMode={pointDisplayMode}
+          onPointSelect={handlePointMarkerSelect}
+          onDragStateChange={setIsVertexDragging}
+          updateFeatureCoordinates={updateFeatureCoordinates}
         />
 
         <EditableSelectedGleba
@@ -1343,6 +1423,8 @@ export default function MapView({
           updateSelectedGlebaCoordinates={updateSelectedGlebaCoordinates}
           onVertexEditActiveChange={setIsVertexDragging}
           pointDisplayMode={pointDisplayMode}
+          requestedVertexActivation={requestedVertexActivation}
+          onRequestedVertexActivationApplied={handleRequestedVertexActivationApplied}
         />
         <ValidationPointMarker queryPoint={queryPoint} />
         <Legend />

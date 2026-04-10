@@ -56,6 +56,24 @@ function formatCarDatasetCount(value) {
   return `${value || 0} imovel(is)`
 }
 
+function formatImportedDatasetSourceType(metadata) {
+  if (!metadata) return '-'
+  if (metadata.fileCount > 1 && metadata.sourceType === 'mixed') {
+    return 'multiplos formatos'
+  }
+
+  return metadata.sourceType || '-'
+}
+
+function formatImportedDatasetLabel(metadata) {
+  if (!metadata) return '-'
+  if ((metadata.fileCount || 0) <= 1) {
+    return metadata.fileName || metadata.fileNames?.[0] || 'Arquivo importado'
+  }
+
+  return `${metadata.fileCount} arquivos selecionados`
+}
+
 function CarDatasetList({
   datasets,
   activeDatasetId,
@@ -255,10 +273,10 @@ export default function CoordinateValidationPanel({
   const [inputError, setInputError] = useState('')
 
   const handleFileChange = async (event) => {
-    const [file] = event.target.files || []
-    if (!file) return
+    const files = Array.from(event.target.files || [])
+    if (!files.length) return
 
-    await importDataset(file)
+    await importDataset(files)
     event.target.value = ''
   }
 
@@ -306,6 +324,7 @@ export default function CoordinateValidationPanel({
         ref={fileInputRef}
         className="coord-file-input"
         type="file"
+        multiple
         accept=".xls,.xlsx,.geojson,.json"
         onChange={handleFileChange}
         disabled={isImporting}
@@ -330,7 +349,7 @@ export default function CoordinateValidationPanel({
           <span className="coord-action-btn__icon">
             <IconFileSelect />
           </span>
-          <span className="coord-action-btn__label">Selecionar Arquivo</span>
+          <span className="coord-action-btn__label">Selecionar Arquivos</span>
         </button>
 
         <button
@@ -372,17 +391,17 @@ export default function CoordinateValidationPanel({
 
       <div className="coord-upload">
         <span className="coord-upload-label">
-          {isImporting || isImportingCar ? 'Processando arquivo...' : 'Formatos suportados: Excel, GeoJSON, KML e KMZ'}
+          {isImporting || isImportingCar ? 'Processando arquivos...' : 'Formatos suportados: Excel, GeoJSON, KML e KMZ'}
         </span>
         <span className="coord-upload-hint">
-          Importe a gleba em `.xls`, `.xlsx`, `.geojson` ou `.json` e carregue a base do CAR em `.kml` ou `.kmz` para checar sobreposicao e visualizar o imovel no mapa.
+          Importe uma ou varias glebas em `.xls`, `.xlsx`, `.geojson` ou `.json` e carregue a base do CAR em `.kml` ou `.kmz` para checar sobreposicao e visualizar o imovel no mapa.
         </span>
       </div>
 
       {importedDataset && (
         <div className="coord-dataset-meta">
-          <span>{importedDataset.metadata.fileName}</span>
-          <span>{importedDataset.metadata.sourceType}</span>
+          <span>{formatImportedDatasetLabel(importedDataset.metadata)}</span>
+          <span>{formatImportedDatasetSourceType(importedDataset.metadata)}</span>
           <span>{importedDataset.metadata.glebaCount} gleba(s)</span>
           <span>{importedDataset.metadata.rowCount} registro(s)</span>
         </div>

@@ -46,6 +46,7 @@ export default function App() {
     matchedFeatureIds,
     visibleFeatureIds,
     mapViewportRequest,
+    updateFeatureCoordinates,
     updateSelectedGlebaCoordinates,
   } = useGlebas()
 
@@ -155,6 +156,7 @@ export default function App() {
             matchedFeatureIds={matchedFeatureIds}
             visibleFeatureIds={visibleFeatureIds}
             viewportRequest={mapViewportRequest}
+            updateFeatureCoordinates={updateFeatureCoordinates}
             updateSelectedGlebaCoordinates={updateSelectedGlebaCoordinates}
             layoutRevision={isSidebarVisible}
             pointDisplayMode={pointDisplayMode}
