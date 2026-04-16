@@ -35,10 +35,12 @@ export default function App() {
     carReferenceDataset,
     carReferenceDatasets,
     activeCarReferenceDatasetId,
+    selectedCarReferenceFeatureId,
     carImportError,
     isImportingCar,
     importCarReferenceDataset,
     selectCarReferenceDataset,
+    selectCarReferenceFeature,
     removeCarReferenceDataset,
     clearCarReferenceDataset,
     validationResult,
@@ -129,10 +131,12 @@ export default function App() {
           carReferenceDataset={carReferenceDataset}
           carReferenceDatasets={carReferenceDatasets}
           activeCarReferenceDatasetId={activeCarReferenceDatasetId}
+          selectedCarReferenceFeatureId={selectedCarReferenceFeatureId}
           carImportError={carImportError}
           isImportingCar={isImportingCar}
           importCarReferenceDataset={importCarReferenceDataset}
           selectCarReferenceDataset={selectCarReferenceDataset}
+          selectCarReferenceFeature={selectCarReferenceFeature}
           removeCarReferenceDataset={removeCarReferenceDataset}
           clearCarReferenceDataset={clearCarReferenceDataset}
           validationResult={validationResult}
@@ -162,6 +166,10 @@ export default function App() {
           <MapView
             glebas={allGlebas}
             carReferenceDataset={carReferenceDataset}
+            carReferenceDatasets={carReferenceDatasets}
+            activeCarReferenceDatasetId={activeCarReferenceDatasetId}
+            selectedCarReferenceFeatureId={selectedCarReferenceFeatureId}
+            onSelectCarReferenceFeature={selectCarReferenceFeature}
             selectedGleba={selectedGleba}
             setSelectedGleba={setSelectedGleba}
             activeVertexReference={activeVertexReference}

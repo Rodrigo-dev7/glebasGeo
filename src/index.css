@@ -1898,13 +1898,20 @@ body.is-resizing-sidebar {
 
 .coord-car-card {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   background: rgba(7, 16, 29, 0.5);
   transition: border-color var(--transition), background var(--transition), transform 0.12s ease;
+}
+
+.coord-car-card__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .coord-car-card--active {
@@ -1973,8 +1980,91 @@ body.is-resizing-sidebar {
   color: #b9ecff;
 }
 
+.coord-car-feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.coord-car-feature-button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.54);
+  color: #dbe9f6;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), transform 0.12s ease;
+}
+
+.coord-car-feature-button:hover {
+  border-color: rgba(56, 189, 248, 0.3);
+  background: rgba(14, 116, 144, 0.18);
+  transform: translateY(-1px);
+}
+
+.coord-car-feature-button.is-selected {
+  border-color: rgba(248, 250, 252, 0.48);
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.24), rgba(168, 85, 247, 0.13));
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.18);
+}
+
+.coord-car-feature-button__index,
+.coord-car-feature-button__state {
+  flex-shrink: 0;
+  padding: 4px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 9px;
+  font-weight: 800;
+  color: #b9ecff;
+  white-space: nowrap;
+}
+
+.coord-car-feature-button__state {
+  color: #d8b4fe;
+}
+
+.coord-car-feature-button.is-selected .coord-car-feature-button__state {
+  border-color: rgba(248, 250, 252, 0.34);
+  background: rgba(248, 250, 252, 0.12);
+  color: #f8fafc;
+}
+
+.coord-car-feature-button__body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.coord-car-feature-button__name {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 800;
+  color: #f4f8fd;
+  overflow-wrap: anywhere;
+}
+
+.coord-car-feature-button__meta {
+  min-width: 0;
+  font-size: 9px;
+  line-height: 1.35;
+  color: #8ca2ba;
+  overflow-wrap: anywhere;
+}
+
 .coord-car-card__select:focus-visible,
-.coord-car-card .coord-inline-clear:focus-visible {
+.coord-car-card .coord-inline-clear:focus-visible,
+.coord-car-feature-button:focus-visible {
   outline-offset: 2px;
 }
 
@@ -2571,6 +2661,17 @@ body.is-resizing-sidebar {
 
 .map-wrapper .leaflet-interactive.gleba-point-handle {
   cursor: grab;
+}
+
+.map-wrapper .leaflet-interactive.gleba-point-handle--start,
+.map-wrapper .leaflet-interactive.gleba-edit-handle--start {
+  filter: drop-shadow(0 0 10px rgba(52, 211, 153, 0.28));
+}
+
+.map-wrapper .leaflet-interactive.gleba-point-handle--closing,
+.map-wrapper .leaflet-interactive.gleba-edit-handle--closing {
+  pointer-events: stroke;
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.28));
 }
 
 .map-wrapper .leaflet-interactive.gleba-edit-handle {
@@ -3694,7 +3795,7 @@ body {
   }
 
   .coord-car-library__header,
-  .coord-car-card {
+  .coord-car-card__main {
     flex-direction: column;
     align-items: stretch;
   }
@@ -3705,6 +3806,15 @@ body {
 
   .coord-car-card__row {
     align-items: flex-start;
+  }
+
+  .coord-car-feature-button {
+    grid-template-columns: 1fr auto;
+  }
+
+  .coord-car-feature-button__index {
+    grid-column: 1 / -1;
+    width: fit-content;
   }
 }
 

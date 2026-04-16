@@ -16,27 +16,29 @@ function ensureClosedRing(coordinates = []) {
 }
 
 export function getEditableCoordinates(feature) {
+  const originalCoordinates = feature?.properties?.originalCoordinates || []
+  const coordinateStatuses = feature?.properties?.coordinateStatuses || []
+
+  if (originalCoordinates.length) {
+    return originalCoordinates.map(([lon, lat]) => [Number(lon), Number(lat)])
+  }
+
+  if (coordinateStatuses.length) {
+    return coordinateStatuses.map(({ lon, lat }) => [Number(lon), Number(lat)])
+  }
+
   const displayCoordinates =
     feature?.properties?.displayCoordinates ||
     feature?.geometry?.coordinates?.[0] ||
     []
-
-  if (displayCoordinates.length > 1) {
-    const first = displayCoordinates[0]
-    const last = displayCoordinates[displayCoordinates.length - 1]
-
-    if (coordinatesEqual(first, last)) {
-      return displayCoordinates.slice(0, -1).map(([lon, lat]) => [Number(lon), Number(lat)])
-    }
-  }
 
   return displayCoordinates.map(([lon, lat]) => [Number(lon), Number(lat)])
 }
 
 function buildFeatureGeometryState(editableCoordinates) {
   const normalizedCoordinates = editableCoordinates.map(([lon, lat]) => [Number(lon), Number(lat)])
+  const originalCoordinates = normalizedCoordinates.map(([lon, lat]) => [lon, lat])
   const displayCoordinates = ensureClosedRing(normalizedCoordinates)
-  const originalCoordinates = [...displayCoordinates]
   const sicor = validateSicorPolygon({
     originalCoordinates,
     displayCoordinates,

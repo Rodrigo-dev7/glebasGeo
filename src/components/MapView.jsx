@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CircleMarker, MapContainer, Pane, Polyline, Popup, TileLayer, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import Legend from './Legend'
+import { dedupeCarReferenceFeatures } from '../services/carReferenceFeatureService'
 import { getEditableCoordinates } from '../services/featureGeometryService'
 import { calculatePolygonAreaHectares } from '../services/glebaEnrichmentService'
 
@@ -112,6 +113,32 @@ const CAR_REFERENCE_MATCHED_STYLE = {
   dashArray: '8 4',
 }
 
+const CAR_REFERENCE_SELECTED_STYLE = {
+  color: '#f8fafc',
+  fillColor: '#38bdf8',
+  fillOpacity: 0.26,
+  opacity: 1,
+  weight: 5.2,
+  dashArray: null,
+}
+
+const CAR_REFERENCE_DIMMED_STYLE = {
+  color: '#8b5cf6',
+  fillColor: '#a855f7',
+  fillOpacity: 0.025,
+  opacity: 0.34,
+  weight: 1.4,
+  dashArray: '8 8',
+}
+
+const CAR_REFERENCE_DATASET_STYLES = [
+  { color: '#c084fc', fillColor: '#a855f7', dashArray: '10 6', dashOffset: '0' },
+  { color: '#38bdf8', fillColor: '#06b6d4', dashArray: '2 6', dashOffset: '2' },
+  { color: '#f472b6', fillColor: '#ec4899', dashArray: '12 5 3 5', dashOffset: '4' },
+  { color: '#fbbf24', fillColor: '#f59e0b', dashArray: '6 6', dashOffset: '3' },
+  { color: '#34d399', fillColor: '#22c55e', dashArray: '14 6', dashOffset: '6' },
+]
+
 const HIDDEN_STYLE = {
   color: 'transparent',
   fillColor: 'transparent',
@@ -202,10 +229,19 @@ function coordinatesMatch(left, right, tolerance = COORDINATE_MATCH_TOLERANCE) {
   )
 }
 
+function ensureClosedCoordinateRing(coordinates = []) {
+  if (coordinates.length < 2) return coordinates
+
+  const first = coordinates[0]
+  const last = coordinates[coordinates.length - 1]
+
+  return coordinatesMatch(first, last)
+    ? coordinates
+    : [...coordinates, first]
+}
+
 function resolveEditableVertexIndex(feature, displayIndex) {
   const editableCoordinates = getEditableCoordinates(feature)
-  const coordinateStatuses = feature?.properties?.coordinateStatuses || []
-  const coordinate = coordinateStatuses[displayIndex]
 
   if (!editableCoordinates.length || !Number.isInteger(displayIndex) || displayIndex < 0) {
     return null
@@ -215,15 +251,7 @@ function resolveEditableVertexIndex(feature, displayIndex) {
     return displayIndex
   }
 
-  if (coordinate?.isLast && coordinate?.isRepeatedStart) {
-    return 0
-  }
-
-  const matchedEditableIndex = editableCoordinates.findIndex((editableCoordinate) => (
-    coordinatesMatch(editableCoordinate, [coordinate?.lon, coordinate?.lat])
-  ))
-
-  return matchedEditableIndex >= 0 ? matchedEditableIndex : null
+  return null
 }
 
 function buildActiveVertexReference(featureId, displayIndex, vertexIndex) {
@@ -309,30 +337,124 @@ function resolveClosingDisplayIndex(feature, displayIndex) {
   return null
 }
 
-function getVertexMarkerStyle(coordinate, isActive = false) {
+function resolveCoordinateRole(feature, displayIndex, coordinate = null) {
+  const coordinateStatuses = feature?.properties?.coordinateStatuses || []
+
+  if (!Number.isInteger(displayIndex) || coordinateStatuses.length < 2) {
+    return 'default'
+  }
+
+  const firstCoordinate = coordinateStatuses[0]
+  const lastDisplayIndex = coordinateStatuses.length - 1
+  const lastCoordinate = coordinateStatuses[lastDisplayIndex]
+  const targetCoordinate = coordinate || coordinateStatuses[displayIndex] || null
+
+  if (
+    !lastCoordinate?.isLast ||
+    !lastCoordinate?.isRepeatedStart ||
+    !coordinatesMatch(
+      [firstCoordinate?.lon, firstCoordinate?.lat],
+      [lastCoordinate?.lon, lastCoordinate?.lat]
+    )
+  ) {
+    return 'default'
+  }
+
+  if (displayIndex === 0) {
+    return 'start'
+  }
+
+  if (displayIndex === lastDisplayIndex && targetCoordinate?.isRepeatedStart) {
+    return 'closing'
+  }
+
+  return 'default'
+}
+
+function describeCoordinateRole(feature, coordinate, displayIndex) {
+  const role = resolveCoordinateRole(feature, displayIndex, coordinate)
+
+  if (role === 'start') {
+    return 'Ponto inicial do poligono'
+  }
+
+  if (role === 'closing') {
+    return 'Ponto de fechamento do poligono'
+  }
+
+  return null
+}
+
+function buildMarkerClassName(baseClassName, role = 'default', isActive = false, extraClasses = []) {
+  const classNames = [baseClassName]
+
+  if (role !== 'default') {
+    classNames.push(`${baseClassName}--${role}`)
+  }
+
+  if (isActive) {
+    classNames.push('is-active')
+  }
+
+  return [...classNames, ...extraClasses].join(' ')
+}
+
+function getVertexMarkerStyle(coordinate, isActive = false, role = 'default') {
   const hasOverlap = coordinateHasOverlapIssue(coordinate)
+
+  if (role === 'closing') {
+    return {
+      radius: isActive
+        ? (hasOverlap ? 13 : 11)
+        : (hasOverlap ? 11 : 9),
+      pathOptions: {
+        color: hasOverlap ? '#fdba74' : coordinate?.isValid === false ? '#fda4af' : '#93c5fd',
+        weight: isActive ? 3.6 : 3,
+        fillColor: hasOverlap ? '#f97316' : coordinate?.isValid === false ? '#ef4444' : '#38bdf8',
+        fillOpacity: 0.08,
+        dashArray: hasOverlap ? '6 4' : '4 3',
+      },
+    }
+  }
+
+  const accentColor = role === 'start'
+    ? '#e0f2fe'
+    : hasOverlap
+      ? '#fdba74'
+      : coordinate?.isValid === false
+        ? '#fecaca'
+        : '#bbf7d0'
+  const accentFill = role === 'start'
+    ? '#34d399'
+    : hasOverlap
+      ? '#f97316'
+      : coordinate?.isValid === false
+        ? '#ef4444'
+        : '#22c55e'
 
   return {
     radius: isActive
       ? (hasOverlap ? 11 : 8)
       : (hasOverlap ? 9 : 6),
     pathOptions: {
-      color: hasOverlap ? '#fdba74' : coordinate?.isValid === false ? '#fecaca' : '#bbf7d0',
-      weight: hasOverlap ? 3 : 2,
-      fillColor: hasOverlap ? '#f97316' : coordinate?.isValid === false ? '#ef4444' : '#22c55e',
+      color: accentColor,
+      weight: role === 'start'
+        ? (hasOverlap ? 3.2 : 2.4)
+        : (hasOverlap ? 3 : 2),
+      fillColor: accentFill,
       fillOpacity: 1,
     },
   }
 }
 
-function getEditableVertexPathOptions(coordinate, isActive = false) {
-  const markerStyle = getVertexMarkerStyle(coordinate, isActive)
+function getEditableVertexPathOptions(coordinate, isActive = false, role = 'default') {
+  const markerStyle = getVertexMarkerStyle(coordinate, isActive, role)
 
   return {
     radius: markerStyle.radius + (isActive ? 1 : 1.5),
     pathOptions: {
       ...markerStyle.pathOptions,
-      className: `gleba-edit-handle${isActive ? ' is-active' : ''}`,
+      className: buildMarkerClassName('gleba-edit-handle', role, isActive),
     },
   }
 }
@@ -346,7 +468,7 @@ function getCompanionVertexPathOptions(coordinate) {
       ...markerStyle.pathOptions,
       weight: Math.max(markerStyle.pathOptions.weight, 2),
       fillOpacity: 0.2,
-      className: 'gleba-edit-handle is-companion',
+      className: buildMarkerClassName('gleba-edit-handle', 'default', false, ['is-companion']),
     },
   }
 }
@@ -396,18 +518,22 @@ function resolvePopupArea(feature, areaOverride = null) {
 function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, vertexIndex, displayIndex = null) {
   const group = L.layerGroup().addTo(leafMap)
   const style = STATUS_STYLES[selectedGleba.properties.status] || STATUS_STYLES.pendente
-  const ll = ringLonLat.map(([lon, lat]) => [lat, lon])
-  const activeCoordinate = selectedGleba.properties.coordinateStatuses?.[vertexIndex]
-  const activeVertexStyle = getVertexMarkerStyle(activeCoordinate, true)
-  const closingDisplayIndex = resolveClosingDisplayIndex(selectedGleba, displayIndex)
-  // Keep the repeated closing handle visible during drag without offsetting it on the map.
-  const companionCoordinate =
-    Number.isInteger(closingDisplayIndex)
-      ? selectedGleba.properties.coordinateStatuses?.[closingDisplayIndex] || activeCoordinate
-      : null
-  const companionVertexStyle = companionCoordinate
-    ? getCompanionVertexPathOptions(companionCoordinate)
-    : null
+  const closedRing = ensureClosedCoordinateRing(ringLonLat)
+  const ll = closedRing.map(([lon, lat]) => [lat, lon])
+  const activeDisplayIndex = Number.isInteger(displayIndex) ? displayIndex : vertexIndex
+  const activeCoordinate =
+    selectedGleba.properties.coordinateStatuses?.[activeDisplayIndex] ||
+    selectedGleba.properties.coordinateStatuses?.[vertexIndex]
+  const activeRole = resolveCoordinateRole(selectedGleba, activeDisplayIndex, activeCoordinate)
+  const activeVertexStyle = getEditableVertexPathOptions(activeCoordinate, true, activeRole)
+  const companionDisplayIndexes = [resolveClosingDisplayIndex(selectedGleba, activeDisplayIndex)]
+    .filter((index, currentIndex, indexes) => (
+      Number.isInteger(index) &&
+      index !== activeDisplayIndex &&
+      index >= 0 &&
+      index < ringLonLat.length &&
+      indexes.indexOf(index) === currentIndex
+    ))
 
   if (selectedGleba.properties.status === 'invalida' && selectedGleba.properties.originalCoordinates?.length > 1) {
     L.polyline(
@@ -416,7 +542,7 @@ function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, verte
     ).addTo(group)
   }
 
-  const shape = L.polyline([...ll, ll[0]], {
+  const shape = L.polyline(ll, {
     color: style.color,
     weight: 2.75,
     opacity: 0.96,
@@ -426,7 +552,7 @@ function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, verte
   })
   shape.addTo(group)
 
-  const outline = L.polyline([...ll, ll[0]], {
+  const outline = L.polyline(ll, {
     color: '#f8fafc',
     weight: 1.5,
     dashArray: '3 6',
@@ -451,23 +577,34 @@ function createVertexDragPreviewLayers(leafMap, selectedGleba, ringLonLat, verte
   })
   activeVertex.addTo(group)
 
-  const closingVertex = companionVertexStyle
-    ? L.circleMarker(ll[vertexIndex], {
-      ...companionVertexStyle.pathOptions,
-      radius: companionVertexStyle.radius,
+  const companionVertices = companionDisplayIndexes.map((companionIndex) => {
+    const companionCoordinate =
+      selectedGleba.properties.coordinateStatuses?.[companionIndex] ||
+      activeCoordinate
+    const companionRole = resolveCoordinateRole(selectedGleba, companionIndex, companionCoordinate)
+    const companionStyle = getEditableVertexPathOptions(companionCoordinate, false, companionRole)
+    const companionVertex = L.circleMarker(ll[companionIndex], {
+      ...companionStyle.pathOptions,
+      radius: companionStyle.radius,
       interactive: false,
     }).addTo(group)
-    : null
 
-  return { group, shape, outline, helperLine, activeVertex, closingVertex }
+    return {
+      marker: companionVertex,
+      vertexIndex: companionIndex,
+    }
+  })
+
+  return { group, shape, outline, helperLine, activeVertex, companionVertices }
 }
 
 function updateVertexDragPreviewLayers(layers, selectedGleba, vertexIndex, ringLonLat) {
   if (!layers) return
 
-  const ll = ringLonLat.map(([lon, lat]) => [lat, lon])
-  layers.shape.setLatLngs([...ll, ll[0]])
-  layers.outline.setLatLngs([...ll, ll[0]])
+  const closedRing = ensureClosedCoordinateRing(ringLonLat)
+  const ll = closedRing.map(([lon, lat]) => [lat, lon])
+  layers.shape.setLatLngs(ll)
+  layers.outline.setLatLngs(ll)
   const n = ringLonLat.length
   if (n > 2) {
     const prev = (vertexIndex - 1 + n) % n
@@ -486,10 +623,12 @@ function updateVertexDragPreviewLayers(layers, selectedGleba, vertexIndex, ringL
     ringLonLat[vertexIndex][0],
   ])
 
-  layers.closingVertex?.setLatLng([
-    ringLonLat[vertexIndex][1],
-    ringLonLat[vertexIndex][0],
-  ])
+  layers.companionVertices?.forEach(({ marker, vertexIndex: companionIndex }) => {
+    marker.setLatLng([
+      ringLonLat[companionIndex][1],
+      ringLonLat[companionIndex][0],
+    ])
+  })
 }
 
 function popupMarkup(feature, areaOverride = null) {
@@ -543,6 +682,7 @@ function carReferencePopupMarkup(feature) {
     properties.municipio || '-',
     properties.uf || null,
   ].filter(Boolean).join(' / ')
+  const datasetName = properties.__carDatasetName || properties.origem_arquivo || null
   const geometryArea =
     feature.geometry?.type === 'Polygon'
       ? calculatePolygonAreaHectares(feature.geometry.coordinates?.[0] || [])
@@ -570,6 +710,12 @@ function carReferencePopupMarkup(feature) {
           <span class="pcell-label">Munic&iacute;pio / UF</span>
           <span class="pcell-val">${escapeHtml(municipalityUf)}</span>
         </div>
+        ${datasetName ? `
+          <div class="popup-cell popup-cell--full">
+            <span class="pcell-label">Arquivo KML/KMZ</span>
+            <span class="pcell-val">${escapeHtml(datasetName)}</span>
+          </div>
+        ` : ''}
         <div class="popup-cell popup-cell--full">
           <span class="pcell-label">&Aacute;rea</span>
           <span class="pcell-val">${escapeHtml(formatArea(resolvedArea))}</span>
@@ -591,6 +737,79 @@ function featureStyle(feature, selectedId, matchedFeatureIds) {
   }
 
   return base
+}
+
+function getCarFeatureLayerKey(datasetId, featureId) {
+  if (!featureId) return null
+  return datasetId ? `${datasetId}::${featureId}` : featureId
+}
+
+function getCarReferenceDatasetStyle(feature) {
+  const datasetIndex = Number(feature?.properties?.__carDatasetIndex)
+  const style = CAR_REFERENCE_DATASET_STYLES[
+    Number.isInteger(datasetIndex) && datasetIndex >= 0
+      ? datasetIndex % CAR_REFERENCE_DATASET_STYLES.length
+      : 0
+  ]
+
+  return {
+    ...CAR_REFERENCE_STYLE,
+    ...style,
+  }
+}
+
+function carReferenceStyle(feature, overlapIdSet, selectedLayerKey, matchedDatasetId = null) {
+  const properties = feature?.properties || {}
+  const featureId = properties.id
+  const featureLayerKey =
+    properties.__carLayerKey ||
+    getCarFeatureLayerKey(properties.__carDatasetId, featureId)
+  const datasetStyle = getCarReferenceDatasetStyle(feature)
+
+  if (selectedLayerKey && featureLayerKey === selectedLayerKey) {
+    return CAR_REFERENCE_SELECTED_STYLE
+  }
+
+  if (selectedLayerKey) {
+    return {
+      ...CAR_REFERENCE_DIMMED_STYLE,
+      color: datasetStyle.color,
+      fillColor: datasetStyle.fillColor,
+      dashArray: datasetStyle.dashArray,
+      dashOffset: datasetStyle.dashOffset,
+    }
+  }
+
+  if (
+    overlapIdSet.has(featureId) &&
+    (!matchedDatasetId || properties.__carDatasetId === matchedDatasetId)
+  ) {
+    return CAR_REFERENCE_MATCHED_STYLE
+  }
+
+  return datasetStyle
+}
+
+function buildCarReferenceMapGeojson(datasets = []) {
+  return {
+    type: 'FeatureCollection',
+    features: datasets.flatMap((dataset, datasetIndex) => (
+      dedupeCarReferenceFeatures(dataset.geojson?.features || []).map((feature) => {
+        const featureId = feature.properties?.id
+
+        return {
+          ...feature,
+          properties: {
+            ...feature.properties,
+            __carDatasetId: dataset.datasetId,
+            __carDatasetName: dataset.metadata?.fileName || feature.properties?.origem_arquivo || 'Base CAR/KML',
+            __carDatasetIndex: datasetIndex,
+            __carLayerKey: getCarFeatureLayerKey(dataset.datasetId, featureId),
+          },
+        }
+      })
+    )),
+  }
 }
 
 function datasetBounds(glebas) {
@@ -615,6 +834,23 @@ function featureSetBounds(featureIds, featureLayers) {
   const bounds = L.latLngBounds([])
 
   layers.forEach((layer) => {
+    const layerBounds = layer.getBounds?.()
+    if (layerBounds?.isValid()) {
+      bounds.extend(layerBounds)
+    }
+  })
+
+  return bounds.isValid() ? bounds : null
+}
+
+function carReferenceDatasetLayerBounds(datasetId, featureLayers) {
+  if (!datasetId || !featureLayers?.size) return null
+
+  const bounds = L.latLngBounds([])
+
+  featureLayers.forEach((layer) => {
+    if (layer.feature?.properties?.__carDatasetId !== datasetId) return
+
     const layerBounds = layer.getBounds?.()
     if (layerBounds?.isValid()) {
       bounds.extend(layerBounds)
@@ -798,14 +1034,32 @@ function GeoJSONLayer({
 
 function CarReferenceLayer({
   carGeojson,
+  carDatasetKey = null,
   selectedOverlapIds = [],
+  selectedFeatureId = null,
+  selectedDatasetId = null,
   viewportRequest,
+  onSelectFeature,
 }) {
   const leafMap = useMap()
   const featureGroupRef = useRef(null)
+  const featureLayersRef = useRef(new Map())
   const lastDatasetKeyRef = useRef(null)
   const lastViewportRequestRef = useRef(null)
+  const selectedLayerKeyRef = useRef(getCarFeatureLayerKey(selectedDatasetId, selectedFeatureId))
+  const selectedDatasetIdRef = useRef(selectedDatasetId)
+  const overlapIdSetRef = useRef(new Set())
   const overlapIdSet = useMemo(() => new Set(selectedOverlapIds), [selectedOverlapIds])
+  const selectedLayerKey = useMemo(
+    () => getCarFeatureLayerKey(selectedDatasetId, selectedFeatureId),
+    [selectedDatasetId, selectedFeatureId]
+  )
+
+  useEffect(() => {
+    selectedLayerKeyRef.current = selectedLayerKey
+    selectedDatasetIdRef.current = selectedDatasetId
+    overlapIdSetRef.current = overlapIdSet
+  }, [overlapIdSet, selectedDatasetId, selectedLayerKey])
 
   useEffect(() => {
     const featureGroup = L.featureGroup().addTo(leafMap)
@@ -814,68 +1068,111 @@ function CarReferenceLayer({
     return () => {
       featureGroup.remove()
       featureGroupRef.current = null
+      featureLayersRef.current.clear()
     }
   }, [leafMap])
 
   useEffect(() => {
     if (!featureGroupRef.current) return
 
-    const datasetKey = JSON.stringify(
-      carGeojson?.features?.map((feature) => ({
-        id: feature.properties?.id,
-        coordinates: feature.geometry,
-      })) || []
+    const nextDatasetKey = JSON.stringify(
+      {
+        source: carDatasetKey,
+        features: carGeojson?.features?.map((feature) => ({
+          id: feature.properties?.id,
+          layerKey: feature.properties?.__carLayerKey,
+          datasetId: feature.properties?.__carDatasetId,
+          coordinates: feature.geometry,
+        })) || [],
+      }
     )
 
-    if (lastDatasetKeyRef.current === datasetKey) {
+    if (lastDatasetKeyRef.current === nextDatasetKey) {
       return
     }
 
-    lastDatasetKeyRef.current = datasetKey
+    lastDatasetKeyRef.current = nextDatasetKey
     featureGroupRef.current.clearLayers()
+    featureLayersRef.current.clear()
 
     if (!carGeojson?.features?.length) return
 
     L.geoJSON(carGeojson, {
       pane: 'car-reference',
-      style: (feature) => (
-        overlapIdSet.has(feature?.properties?.id)
-          ? CAR_REFERENCE_MATCHED_STYLE
-          : CAR_REFERENCE_STYLE
+      style: (feature) => carReferenceStyle(
+        feature,
+        overlapIdSetRef.current,
+        selectedLayerKeyRef.current,
+        selectedDatasetIdRef.current
       ),
       onEachFeature: (feature, layer) => {
+        const properties = feature.properties || {}
+        const featureId = properties.id
+        const datasetId = properties.__carDatasetId
+        const featureLayerKey =
+          properties.__carLayerKey ||
+          getCarFeatureLayerKey(datasetId, featureId)
+
         layer.bindPopup(carReferencePopupMarkup(feature), PERSISTENT_POPUP_OPTIONS)
 
         layer.on({
           mouseover(event) {
+            const activeSelectedLayerKey = selectedLayerKeyRef.current
+            const isSelected = featureLayerKey && featureLayerKey === activeSelectedLayerKey
+            const isMatchedFeature =
+              overlapIdSetRef.current.has(featureId) &&
+              (!selectedDatasetIdRef.current || datasetId === selectedDatasetIdRef.current)
+            const baseStyle = carReferenceStyle(
+              feature,
+              overlapIdSetRef.current,
+              activeSelectedLayerKey,
+              selectedDatasetIdRef.current
+            )
+
             event.target.setStyle(
-              overlapIdSet.has(feature.properties?.id)
+              isSelected
                 ? {
-                    ...CAR_REFERENCE_MATCHED_STYLE,
-                    fillOpacity: 0.28,
-                    weight: 3.5,
+                    ...baseStyle,
+                    fillOpacity: 0.34,
+                    weight: 5.8,
                   }
                 : {
-                    ...CAR_REFERENCE_STYLE,
-                    fillOpacity: 0.14,
-                    weight: 2.8,
+                    ...baseStyle,
+                    fillOpacity: activeSelectedLayerKey ? 0.06 : isMatchedFeature ? 0.28 : 0.14,
+                    weight: activeSelectedLayerKey ? 2 : isMatchedFeature ? 3.5 : 2.8,
                   }
             )
-            event.target.bringToFront()
+
+            if (!activeSelectedLayerKey || isSelected) {
+              event.target.bringToFront()
+              return
+            }
+
+            featureLayersRef.current.get(activeSelectedLayerKey)?.bringToFront()
           },
           mouseout(event) {
-            event.target.setStyle(
-              overlapIdSet.has(feature.properties?.id)
-                ? CAR_REFERENCE_MATCHED_STYLE
-                : CAR_REFERENCE_STYLE
-            )
+            const activeSelectedLayerKey = selectedLayerKeyRef.current
+            event.target.setStyle(carReferenceStyle(
+              feature,
+              overlapIdSetRef.current,
+              activeSelectedLayerKey,
+              selectedDatasetIdRef.current
+            ))
+            featureLayersRef.current.get(activeSelectedLayerKey)?.bringToFront()
+          },
+          click() {
+            onSelectFeature?.(datasetId, featureId)
+            layer.openPopup()
           },
         })
 
         featureGroupRef.current?.addLayer(layer)
+        if (featureLayerKey) {
+          featureLayersRef.current.set(featureLayerKey, layer)
+        }
       },
     })
-  }, [carGeojson, overlapIdSet])
+  }, [carDatasetKey, carGeojson, leafMap, onSelectFeature])
 
   useEffect(() => {
     if (!featureGroupRef.current) return
@@ -884,38 +1181,77 @@ function CarReferenceLayer({
       const featureId = layer.feature?.properties?.id
       if (!featureId || typeof layer.setStyle !== 'function') return
 
-      layer.setStyle(
-        overlapIdSet.has(featureId)
-          ? CAR_REFERENCE_MATCHED_STYLE
-          : CAR_REFERENCE_STYLE
-      )
+      layer.setStyle(carReferenceStyle(layer.feature, overlapIdSet, selectedLayerKey, selectedDatasetId))
     })
-  }, [overlapIdSet])
+
+    if (selectedLayerKey) {
+      featureLayersRef.current.get(selectedLayerKey)?.bringToFront()
+    }
+  }, [overlapIdSet, selectedDatasetId, selectedLayerKey])
 
   useEffect(() => {
-    if (!viewportRequest || viewportRequest.type !== 'car-reference' || lastViewportRequestRef.current === viewportRequest.datasetKey) {
+    const requestKey = viewportRequest?.requestKey || viewportRequest?.datasetKey
+
+    if (
+      !viewportRequest ||
+      !['car-reference', 'car-feature'].includes(viewportRequest.type) ||
+      lastViewportRequestRef.current === requestKey
+    ) {
       return
     }
 
-    const bounds = datasetBounds(carGeojson)
+    if (viewportRequest.type === 'car-feature' && viewportRequest.featureId) {
+      const layerKey = getCarFeatureLayerKey(viewportRequest.datasetKey, viewportRequest.featureId)
+      const layer = featureLayersRef.current.get(layerKey) || featureLayersRef.current.get(viewportRequest.featureId)
+      const bounds = layer?.getBounds?.()
+
+      if (bounds?.isValid()) {
+        layer.bringToFront()
+        animateToBounds(leafMap, bounds, { maxZoom: 18, duration: 1.45, padding: [72, 72] })
+      }
+
+      lastViewportRequestRef.current = requestKey
+      return
+    }
+
+    const bounds =
+      carReferenceDatasetLayerBounds(viewportRequest.datasetKey, featureLayersRef.current) ||
+      datasetBounds(carGeojson)
     if (bounds?.isValid()) {
       animateToBounds(leafMap, bounds, { maxZoom: 16, duration: 1.9 })
     }
 
-    lastViewportRequestRef.current = viewportRequest.datasetKey
+    lastViewportRequestRef.current = requestKey
   }, [carGeojson, leafMap, viewportRequest])
 
   return null
 }
 
-function PointPopupContent({ feature, coordinate }) {
+function PointPopupContent({
+  feature,
+  coordinate,
+  displayIndex = null,
+  lat = coordinate?.lat,
+  lon = coordinate?.lon,
+}) {
+  const resolvedDisplayIndex = Number.isInteger(displayIndex)
+    ? displayIndex
+    : Number.isInteger(coordinate?.index)
+      ? coordinate.index - 1
+      : null
+  const roleLabel = describeCoordinateRole(feature, coordinate, resolvedDisplayIndex)
+
   return (
     <div className="validation-popup">
       <strong>{feature?.properties?.nome || 'Gleba'}</strong>
       <span>Ponto {coordinate?.index || '-'}</span>
-      <span>Lat {Number.isFinite(coordinate?.lat) ? coordinate.lat.toFixed(11) : '-'}</span>
-      <span>Lon {Number.isFinite(coordinate?.lon) ? coordinate.lon.toFixed(11) : '-'}</span>
+      {roleLabel && <span>{roleLabel}</span>}
+      <span>Lat {Number.isFinite(lat) ? lat.toFixed(11) : '-'}</span>
+      <span>Lon {Number.isFinite(lon) ? lon.toFixed(11) : '-'}</span>
       <span>{coordinate?.isValid ? 'Coordenada correta' : 'Coordenada com erro'}</span>
+      {coordinate?.issues?.map((issue, index) => (
+        <span key={`${coordinate?.index || 'point'}-issue-${index}`}>{issue.message}</span>
+      ))}
     </div>
   )
 }
@@ -1074,21 +1410,27 @@ function GlebaPointMarkersLayer({
           .filter(({ displayIndex }) => visibleIndexes.has(displayIndex)),
           activeDisplayIndex
         ).map(({ coordinate, displayIndex, editableVertexIndex }) => {
-            const hasOverlap = coordinateHasOverlapIssue(coordinate)
+            const markerRole = resolveCoordinateRole(feature, displayIndex, coordinate)
+            const markerStyle = getVertexMarkerStyle(
+              coordinate,
+              activeDisplayIndex === displayIndex,
+              markerRole
+            )
 
             return (
               <CircleMarker
                 key={`${feature.properties.id}-global-${coordinate.index}`}
                 center={[coordinate.lat, coordinate.lon]}
                 pane="gleba-points"
-                radius={hasOverlap ? 8 : 5}
+                radius={markerStyle.radius}
                 bubblingMouseEvents={false}
                 pathOptions={{
-                  className: 'gleba-point-handle',
-                  color: hasOverlap ? '#fdba74' : coordinate.isValid ? '#bbf7d0' : '#fecaca',
-                  weight: hasOverlap ? 3 : 2,
-                  fillColor: hasOverlap ? '#f97316' : coordinate.isValid ? '#22c55e' : '#ef4444',
-                  fillOpacity: 0.95,
+                  ...markerStyle.pathOptions,
+                  className: buildMarkerClassName(
+                    'gleba-point-handle',
+                    markerRole,
+                    activeDisplayIndex === displayIndex
+                  ),
                 }}
                 eventHandlers={{
                   mousedown(event) {
@@ -1131,7 +1473,11 @@ function GlebaPointMarkersLayer({
                 }}
               >
                 <Popup {...PERSISTENT_POPUP_OPTIONS}>
-                  <PointPopupContent feature={feature} coordinate={coordinate} />
+                  <PointPopupContent
+                    feature={feature}
+                    coordinate={coordinate}
+                    displayIndex={displayIndex}
+                  />
                 </Popup>
               </CircleMarker>
             )
@@ -1152,7 +1498,7 @@ function SelectedGlebaVerticesPreview({
 
   const displayCoordinates =
     previewCoordinates
-      ? [...previewCoordinates, previewCoordinates[0]]
+      ? ensureClosedCoordinateRing(previewCoordinates)
       : selectedGleba.properties.displayCoordinates ||
     selectedGleba.geometry?.coordinates?.[0] ||
     []
@@ -1214,9 +1560,11 @@ function SelectedGlebaVerticesPreview({
         .map((coordinate, index) => ({ coordinate, index }))
         .filter(({ index }) => visibleIndexes.has(index))
         .map(({ coordinate, index }) => {
+          const markerRole = resolveCoordinateRole(selectedGleba, index, coordinate)
           const markerStyle = getVertexMarkerStyle(
             coordinate,
-            activeVertexIndex === index
+            activeVertexIndex === index,
+            markerRole
           )
 
           return (
@@ -1226,18 +1574,21 @@ function SelectedGlebaVerticesPreview({
           pane="selected-vertices"
           bubblingMouseEvents={false}
           radius={markerStyle.radius}
-          pathOptions={markerStyle.pathOptions}
+          pathOptions={{
+            ...markerStyle.pathOptions,
+            className: buildMarkerClassName(
+              'gleba-point-handle',
+              markerRole,
+              activeVertexIndex === index
+            ),
+          }}
       >
           <Popup {...PERSISTENT_POPUP_OPTIONS}>
-            <div className="validation-popup">
-              <strong>Ponto {coordinate.index}</strong>
-              <span>Lat {coordinate.lat.toFixed(11)}</span>
-              <span>Lon {coordinate.lon.toFixed(11)}</span>
-              <span>{coordinate.isValid ? 'Coordenada correta' : 'Coordenada com erro'}</span>
-              {coordinate.issues?.map((issue, index) => (
-                <span key={index}>{issue.message}</span>
-              ))}
-            </div>
+            <PointPopupContent
+              feature={selectedGleba}
+              coordinate={coordinate}
+              displayIndex={index}
+            />
           </Popup>
         </CircleMarker>
           )
@@ -1513,6 +1864,8 @@ function EditableSelectedGleba({
             orderedMarkerDescriptors,
             descriptor
           )
+          const markerRole = resolveCoordinateRole(selectedGleba, displayIndex, coordinate)
+          const useDistinctStartClosureHandle = markerRole !== 'default'
           const hasCoincidentDescriptors = coincidentDescriptors.length > 1
           const topCoincidentDisplayIndex = hasCoincidentDescriptors
             ? coincidentDescriptors[coincidentDescriptors.length - 1]?.displayIndex
@@ -1521,10 +1874,12 @@ function EditableSelectedGleba({
           const isMarkerActive = Number.isInteger(activeDisplayIndex)
             ? activeDisplayIndex === displayIndex
             : activeVertexIndex === editableVertexIndex
-          const markerStyle = hasCoincidentDescriptors && !isTopCoincidentMarker
-            ? getCompanionVertexPathOptions(coordinate)
-            : getEditableVertexPathOptions(coordinate, isMarkerActive)
-          const nextCoincidentDescriptor = isMarkerActive
+          const markerStyle = useDistinctStartClosureHandle
+            ? getEditableVertexPathOptions(coordinate, isMarkerActive, markerRole)
+            : hasCoincidentDescriptors && !isTopCoincidentMarker
+              ? getCompanionVertexPathOptions(coordinate)
+              : getEditableVertexPathOptions(coordinate, isMarkerActive)
+          const nextCoincidentDescriptor = !useDistinctStartClosureHandle && isMarkerActive
             ? getNextCoincidentMarkerDescriptor(orderedMarkerDescriptors, descriptor)
             : null
 
@@ -1538,7 +1893,7 @@ function EditableSelectedGleba({
           pathOptions={markerStyle.pathOptions}
           eventHandlers={{
             click() {
-              // Overlapped closure markers cycle which logical point is on top for editing.
+              // Generic coincident points can still cycle when they share the same coordinate.
               if (isMarkerActive && nextCoincidentDescriptor) {
                 setActiveVertexIndex(nextCoincidentDescriptor.editableVertexIndex)
                 onActiveVertexChange?.(
@@ -1590,12 +1945,13 @@ function EditableSelectedGleba({
           }}
         >
           <Popup {...PERSISTENT_POPUP_OPTIONS}>
-            <div className="validation-popup">
-              <strong>Ponto {coordinate.index ?? displayIndex + 1}</strong>
-              <span>Lat {lat.toFixed(11)}</span>
-              <span>Lon {lon.toFixed(11)}</span>
-              <span>{coordinate.isValid === false ? 'Coordenada com erro' : 'Coordenada correta'}</span>
-            </div>
+            <PointPopupContent
+              feature={selectedGleba}
+              coordinate={coordinate}
+              displayIndex={displayIndex}
+              lat={lat}
+              lon={lon}
+            />
           </Popup>
         </CircleMarker>
           )
@@ -1650,6 +2006,10 @@ function BasemapControl({ activeBasemap, onChange }) {
 export default function MapView({
   glebas,
   carReferenceDataset,
+  carReferenceDatasets = [],
+  activeCarReferenceDatasetId = null,
+  selectedCarReferenceFeatureId = null,
+  onSelectCarReferenceFeature,
   selectedGleba,
   setSelectedGleba,
   activeVertexReference,
@@ -1671,6 +2031,14 @@ export default function MapView({
   const selectedCarOverlapIds = useMemo(
     () => selectedGleba?.properties?.carOverlapValidation?.overlaps?.map((overlap) => overlap.id).filter(Boolean) || [],
     [selectedGleba]
+  )
+  const carReferenceMapGeojson = useMemo(
+    () => buildCarReferenceMapGeojson(carReferenceDatasets),
+    [carReferenceDatasets]
+  )
+  const carReferenceMapKey = useMemo(
+    () => carReferenceDatasets.map((dataset) => dataset.datasetId).join('|'),
+    [carReferenceDatasets]
   )
 
   const handlePointMarkerSelect = useCallback((feature, pointReference) => {
@@ -1732,6 +2100,11 @@ export default function MapView({
     ))
   }
 
+  const handleCarReferenceFeatureSelect = useCallback((datasetId, featureId) => {
+    if (!datasetId || !featureId) return
+    onSelectCarReferenceFeature?.(datasetId, featureId)
+  }, [onSelectCarReferenceFeature])
+
   return (
     <div className="map-wrapper">
       <MapContainer
@@ -1776,9 +2149,13 @@ export default function MapView({
         )}
 
         <CarReferenceLayer
-          carGeojson={carReferenceDataset?.geojson || null}
+          carGeojson={carReferenceMapGeojson}
+          carDatasetKey={carReferenceMapKey}
           selectedOverlapIds={selectedCarOverlapIds}
+          selectedFeatureId={selectedCarReferenceFeatureId}
+          selectedDatasetId={activeCarReferenceDatasetId}
           viewportRequest={viewportRequest}
+          onSelectFeature={handleCarReferenceFeatureSelect}
         />
 
         <GeoJSONLayer
@@ -1821,4 +2198,3 @@ export default function MapView({
     </div>
   )
 }
-

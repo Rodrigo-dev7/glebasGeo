@@ -9,6 +9,7 @@ import { importDatasetFiles } from '../services/datasetImportService'
 import { validateCoordinateAgainstDataset } from '../services/coordinateValidationService'
 import { buildValidationReport, downloadValidationReport } from '../services/reportService'
 import { parseCarReferenceFile } from '../services/kmlGeoService'
+import { normalizeCarReferenceDataset } from '../services/carReferenceFeatureService'
 import {
   applyCarOverlapValidationToFeature,
   applyCarOverlapValidationToFeatureCollection,
@@ -43,6 +44,7 @@ export function useGlebas() {
   const [isImporting, setIsImporting] = useState(false)
   const [carReferenceDatasets, setCarReferenceDatasets] = useState([])
   const [activeCarReferenceDatasetId, setActiveCarReferenceDatasetId] = useState(null)
+  const [selectedCarReferenceFeatureId, setSelectedCarReferenceFeatureId] = useState(null)
   const [carImportError, setCarImportError] = useState('')
   const [isImportingCar, setIsImportingCar] = useState(false)
   const [validationResult, setValidationResult] = useState(null)
@@ -53,6 +55,15 @@ export function useGlebas() {
   const activeCarReferenceDataset = useMemo(
     () => carReferenceDatasets.find((dataset) => dataset.datasetId === activeCarReferenceDatasetId) || null,
     [activeCarReferenceDatasetId, carReferenceDatasets]
+  )
+
+  const selectedCarReferenceFeature = useMemo(
+    () => (
+      activeCarReferenceDataset?.geojson?.features?.find(
+        (feature) => feature.properties?.id === selectedCarReferenceFeatureId
+      ) || null
+    ),
+    [activeCarReferenceDataset, selectedCarReferenceFeatureId]
   )
 
   const activeDataset = importedDataset?.geojson || EMPTY_DATASET
@@ -217,16 +228,17 @@ export function useGlebas() {
 
     try {
       const parsedDataset = await parseCarReferenceFile(file)
-      const nextCarDataset = {
+      const nextCarDataset = normalizeCarReferenceDataset({
         ...parsedDataset,
         datasetId: createCarDatasetId(parsedDataset),
-      }
+      })
 
       setCarReferenceDatasets((currentDatasets) => [
         nextCarDataset,
         ...currentDatasets.filter((dataset) => dataset.datasetId !== nextCarDataset.datasetId),
       ])
       setActiveCarReferenceDatasetId(nextCarDataset.datasetId)
+      setSelectedCarReferenceFeatureId(null)
       syncCarValidationState(nextCarDataset)
       setMapViewportRequest({
         type: 'car-reference',
@@ -244,11 +256,32 @@ export function useGlebas() {
     if (!nextCarDataset) return
 
     setActiveCarReferenceDatasetId(nextCarDataset.datasetId)
+    setSelectedCarReferenceFeatureId(null)
     setCarImportError('')
     syncCarValidationState(nextCarDataset)
     setMapViewportRequest({
       type: 'car-reference',
       datasetKey: `${nextCarDataset.datasetId}-${Date.now()}`,
+    })
+  }, [carReferenceDatasets, syncCarValidationState])
+
+  const selectCarReferenceFeature = useCallback((datasetId, featureId) => {
+    const nextCarDataset = carReferenceDatasets.find((dataset) => dataset.datasetId === datasetId)
+    const nextFeature = nextCarDataset?.geojson?.features?.find(
+      (feature) => feature.properties?.id === featureId
+    )
+
+    if (!nextCarDataset || !nextFeature?.properties?.id) return
+
+    setActiveCarReferenceDatasetId(nextCarDataset.datasetId)
+    setSelectedCarReferenceFeatureId(nextFeature.properties.id)
+    setCarImportError('')
+    syncCarValidationState(nextCarDataset)
+    setMapViewportRequest({
+      type: 'car-feature',
+      datasetKey: nextCarDataset.datasetId,
+      featureId: nextFeature.properties.id,
+      requestKey: `${nextCarDataset.datasetId}-${nextFeature.properties.id}-${Date.now()}`,
     })
   }, [carReferenceDatasets, syncCarValidationState])
 
@@ -261,6 +294,9 @@ export function useGlebas() {
 
     setCarReferenceDatasets(remainingDatasets)
     setActiveCarReferenceDatasetId(nextActiveCarDataset?.datasetId || null)
+    if (removedWasActive) {
+      setSelectedCarReferenceFeatureId(null)
+    }
     syncCarValidationState(nextActiveCarDataset)
 
     if (nextActiveCarDataset) {
@@ -294,6 +330,7 @@ export function useGlebas() {
   const clearCarReferenceDataset = useCallback(() => {
     setCarReferenceDatasets([])
     setActiveCarReferenceDatasetId(null)
+    setSelectedCarReferenceFeatureId(null)
     setCarImportError('')
     syncCarValidationState(null)
 
@@ -470,10 +507,13 @@ export function useGlebas() {
     carReferenceDataset: activeCarReferenceDataset,
     carReferenceDatasets,
     activeCarReferenceDatasetId,
+    selectedCarReferenceFeature,
+    selectedCarReferenceFeatureId,
     carImportError,
     isImportingCar,
     importCarReferenceDataset,
     selectCarReferenceDataset,
+    selectCarReferenceFeature,
     removeCarReferenceDataset,
     clearCarReferenceDataset,
     validationResult,

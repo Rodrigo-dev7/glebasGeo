@@ -44,10 +44,12 @@ export default function Sidebar({
   carReferenceDataset,
   carReferenceDatasets,
   activeCarReferenceDatasetId,
+  selectedCarReferenceFeatureId,
   carImportError,
   isImportingCar,
   importCarReferenceDataset,
   selectCarReferenceDataset,
+  selectCarReferenceFeature,
   removeCarReferenceDataset,
   clearCarReferenceDataset,
   validationResult,
@@ -197,10 +199,12 @@ export default function Sidebar({
           carReferenceDataset={carReferenceDataset}
           carReferenceDatasets={carReferenceDatasets}
           activeCarReferenceDatasetId={activeCarReferenceDatasetId}
+          selectedCarReferenceFeatureId={selectedCarReferenceFeatureId}
           carImportError={carImportError}
           isImportingCar={isImportingCar}
           importCarReferenceDataset={importCarReferenceDataset}
           selectCarReferenceDataset={selectCarReferenceDataset}
+          selectCarReferenceFeature={selectCarReferenceFeature}
           removeCarReferenceDataset={removeCarReferenceDataset}
           clearCarReferenceDataset={clearCarReferenceDataset}
           validationResult={validationResult}

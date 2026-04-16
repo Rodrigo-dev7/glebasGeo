@@ -2,6 +2,7 @@ const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50
 const ZIP_CENTRAL_DIRECTORY_SIGNATURE = 0x02014b50
 const ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50
 import { lookupMunicipalityAndState } from './adminBoundaryService'
+import { normalizeCarReferenceDataset } from './carReferenceFeatureService'
 import { calculatePolygonAreaHectares } from './glebaEnrichmentService'
 
 const CAR_NUMBER_ALIASES = [
@@ -268,7 +269,7 @@ async function parseKmlText(text, fileName) {
     throw new Error('Nao encontrei poligonos validos no arquivo informado.')
   }
 
-  return {
+  return normalizeCarReferenceDataset({
     geojson: {
       type: 'FeatureCollection',
       features,
@@ -280,7 +281,7 @@ async function parseKmlText(text, fileName) {
       glebaCount: features.length,
       importedAt: new Date().toISOString(),
     },
-  }
+  })
 }
 
 function decodeZipText(bytes) {

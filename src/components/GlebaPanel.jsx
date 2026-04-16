@@ -47,7 +47,7 @@ function buildCoordinateReference(featureId, coordinate, displayIndex) {
   return {
     featureId: featureId || null,
     displayIndex,
-    vertexIndex: coordinate?.isLast && coordinate?.isRepeatedStart ? 0 : displayIndex,
+    vertexIndex: displayIndex,
   }
 }
 

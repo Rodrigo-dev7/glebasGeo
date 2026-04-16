@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { dedupeCarReferenceFeatures } from '../services/carReferenceFeatureService'
 
 function IconFileSelect() {
   return (
@@ -56,6 +57,47 @@ function formatCarDatasetCount(value) {
   return `${value || 0} imovel(is)`
 }
 
+function formatCarFeatureArea(value) {
+  const area = Number(value)
+  if (!Number.isFinite(area)) return null
+
+  return `${area.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha`
+}
+
+function getCarFeatureCode(feature) {
+  const properties = feature?.properties || {}
+
+  return (
+    properties.numero_car_recibo ||
+    properties.codigo_imovel ||
+    properties.cod_imovel ||
+    properties.car ||
+    null
+  )
+}
+
+function getCarFeatureLabel(feature, index) {
+  const properties = feature?.properties || {}
+
+  return (
+    properties.nome ||
+    getCarFeatureCode(feature) ||
+    `Imovel CAR ${index + 1}`
+  )
+}
+
+function getCarFeatureMeta(feature) {
+  const properties = feature?.properties || {}
+  const code = getCarFeatureCode(feature)
+  const municipalityUf = [
+    properties.municipio,
+    properties.uf,
+  ].filter(Boolean).join(' / ')
+  const area = formatCarFeatureArea(properties.area ?? properties.areaCalculada ?? properties.areaInformada)
+
+  return [code, municipalityUf, area].filter(Boolean).join(' | ')
+}
+
 function formatImportedDatasetSourceType(metadata) {
   if (!metadata) return '-'
   if (metadata.fileCount > 1 && metadata.sourceType === 'mixed') {
@@ -77,7 +119,9 @@ function formatImportedDatasetLabel(metadata) {
 function CarDatasetList({
   datasets,
   activeDatasetId,
+  selectedFeatureId,
   onSelect,
+  onSelectFeature,
   onRemove,
   onClearAll,
 }) {
@@ -121,7 +165,7 @@ function CarDatasetList({
         <div>
           <div className="coord-car-library__title">Bases CAR importadas</div>
           <div className="coord-car-library__subtitle">
-            Selecione qual base deseja exibir e validar no mapa.
+            Selecione a base ativa para validar. Todas as bases importadas ficam visiveis no mapa.
           </div>
         </div>
 
@@ -159,39 +203,76 @@ function CarDatasetList({
         <div ref={contentRef} className="coord-car-library__list">
           {datasets.map((dataset) => {
             const isActive = dataset.datasetId === activeDatasetId
+            const features = dedupeCarReferenceFeatures(dataset.geojson?.features || [])
 
             return (
               <div
                 key={dataset.datasetId}
                 className={`coord-car-card${isActive ? ' coord-car-card--active' : ''}`}
               >
-                <button
-                  type="button"
-                  className="coord-car-card__select"
-                  onClick={() => onSelect(dataset.datasetId)}
-                  aria-pressed={isActive}
-                  title={isActive ? 'Base CAR ativa' : 'Selecionar esta base CAR'}
-                >
-                  <div className="coord-car-card__row">
-                    <span className="coord-car-card__name">{dataset.metadata.fileName}</span>
-                    <span className={`coord-car-card__badge${isActive ? ' coord-car-card__badge--active' : ''}`}>
-                      {isActive ? 'Ativo' : 'Selecionar'}
-                    </span>
-                  </div>
+                <div className="coord-car-card__main">
+                  <button
+                    type="button"
+                    className="coord-car-card__select"
+                    onClick={() => onSelect(dataset.datasetId)}
+                    aria-pressed={isActive}
+                    title={isActive ? 'Base CAR ativa' : 'Selecionar esta base CAR'}
+                  >
+                    <div className="coord-car-card__row">
+                      <span className="coord-car-card__name">{dataset.metadata.fileName}</span>
+                      <span className={`coord-car-card__badge${isActive ? ' coord-car-card__badge--active' : ''}`}>
+                        {isActive ? 'Ativo' : 'Selecionar'}
+                      </span>
+                    </div>
 
-                  <div className="coord-car-card__meta">
-                    <span>{dataset.metadata.sourceType || 'KML/KMZ CAR'}</span>
-                    <span>{formatCarDatasetCount(dataset.metadata.glebaCount)}</span>
-                  </div>
-                </button>
+                    <div className="coord-car-card__meta">
+                      <span>{dataset.metadata.sourceType || 'KML/KMZ CAR'}</span>
+                      <span>{formatCarDatasetCount(features.length || dataset.metadata.glebaCount)}</span>
+                    </div>
+                  </button>
 
-                <button
-                  type="button"
-                  className="coord-inline-clear"
-                  onClick={() => onRemove(dataset.datasetId)}
-                >
-                  Remover
-                </button>
+                  <button
+                    type="button"
+                    className="coord-inline-clear"
+                    onClick={() => onRemove(dataset.datasetId)}
+                  >
+                    Remover
+                  </button>
+                </div>
+
+                {isActive && features.length > 0 && (
+                  <div className="coord-car-feature-list" aria-label="Imoveis CAR desta base">
+                    {features.map((feature, index) => {
+                      const featureId = feature.properties?.id
+                      const isSelected = Boolean(featureId && featureId === selectedFeatureId)
+
+                      return (
+                        <button
+                          key={featureId || `${dataset.datasetId}-${index}`}
+                          type="button"
+                          className={`coord-car-feature-button${isSelected ? ' is-selected' : ''}`}
+                          onClick={() => onSelectFeature(dataset.datasetId, featureId)}
+                          aria-pressed={isSelected}
+                          disabled={!featureId}
+                          title={isSelected ? 'Imovel CAR em destaque no mapa' : 'Destacar este imovel CAR no mapa'}
+                        >
+                          <span className="coord-car-feature-button__index">CAR {index + 1}</span>
+                          <span className="coord-car-feature-button__body">
+                            <span className="coord-car-feature-button__name">
+                              {getCarFeatureLabel(feature, index)}
+                            </span>
+                            <span className="coord-car-feature-button__meta">
+                              {getCarFeatureMeta(feature) || 'Sem metadados do CAR'}
+                            </span>
+                          </span>
+                          <span className="coord-car-feature-button__state">
+                            {isSelected ? 'Ativo' : 'Ver'}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -256,10 +337,12 @@ export default function CoordinateValidationPanel({
   carReferenceDataset,
   carReferenceDatasets,
   activeCarReferenceDatasetId,
+  selectedCarReferenceFeatureId,
   carImportError,
   isImportingCar,
   importCarReferenceDataset,
   selectCarReferenceDataset,
+  selectCarReferenceFeature,
   removeCarReferenceDataset,
   clearCarReferenceDataset,
   validationResult,
@@ -410,16 +493,23 @@ export default function CoordinateValidationPanel({
       <CarDatasetList
         datasets={carReferenceDatasets}
         activeDatasetId={activeCarReferenceDatasetId}
+        selectedFeatureId={selectedCarReferenceFeatureId}
         onSelect={selectCarReferenceDataset}
+        onSelectFeature={selectCarReferenceFeature}
         onRemove={removeCarReferenceDataset}
         onClearAll={clearCarReferenceDataset}
       />
 
       {carReferenceDataset && (
         <div className="coord-dataset-meta coord-dataset-meta--car">
-          <span>Base ativa no mapa</span>
+          <span>Base ativa para validacao</span>
           <span>{carReferenceDataset.metadata.fileName}</span>
-          <span>{formatCarDatasetCount(carReferenceDataset.metadata.glebaCount)}</span>
+          <span>
+            {formatCarDatasetCount(
+              dedupeCarReferenceFeatures(carReferenceDataset.geojson?.features || []).length ||
+              carReferenceDataset.metadata.glebaCount
+            )}
+          </span>
         </div>
       )}
 
