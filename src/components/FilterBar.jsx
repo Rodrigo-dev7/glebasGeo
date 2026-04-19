@@ -36,6 +36,14 @@ function IconPending() {
   )
 }
 
+function IconChevron({ expanded }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polyline points={expanded ? '6 15 12 9 18 15' : '6 9 12 15 18 9'} />
+    </svg>
+  )
+}
+
 const FILTERS = [
   { key: 'todas', label: 'Todas', icon: IconAll, stat: 'total' },
   { key: 'valida', label: 'Validas', icon: IconSuccess, stat: 'validas' },
@@ -61,9 +69,25 @@ export default function FilterBar({
   stats,
   pointDisplayMode = 'marked',
   setPointDisplayMode,
+  collapsed = false,
+  onCollapsedChange,
 }) {
   return (
-    <div className="filter-bar">
+    <div className={`filter-bar${collapsed ? ' filter-bar--collapsed' : ''}`}>
+      <button
+        type="button"
+        className="filter-bar__toggle"
+        onClick={() => onCollapsedChange?.(!collapsed)}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? 'Expandir header do mapa' : 'Esconder header do mapa'}
+        title={collapsed ? 'Expandir header' : 'Esconder header'}
+      >
+        <span className="filter-bar__toggle-icon">
+          <IconChevron expanded={!collapsed} />
+        </span>
+        <span>{collapsed ? 'Exibir' : 'Ocultar'}</span>
+      </button>
+
       <div className="filter-bar__intro">
         <span className="filter-label">Mapa operacional</span>
         <strong className="filter-summary">Filtre a camada principal por status de validacao</strong>

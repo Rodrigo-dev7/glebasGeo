@@ -51,6 +51,32 @@ function buildCoordinateReference(featureId, coordinate, displayIndex) {
   }
 }
 
+function formatCarValidationStatusLabel(carValidation) {
+  const status = carValidation?.status
+  const primaryType = carValidation?.primaryMatch?.referenceType || 'CAR/KML'
+
+  if (status === 'inside') {
+    return `Gleba dentro do ${primaryType}`
+  }
+
+  if (status === 'partial') {
+    return `Gleba parcialmente dentro do ${primaryType}`
+  }
+
+  if (status === 'clear') {
+    return 'Fora do CAR/KML'
+  }
+
+  return 'Nao analisado'
+}
+
+function formatCarValidationMatches(matches = []) {
+  return matches
+    .map((match) => match.nome || match.datasetName || match.codigo || null)
+    .filter(Boolean)
+    .join(' | ')
+}
+
 function CoordinateTable({
   coordinates = [],
   activeCoordinateIndex = null,
@@ -108,22 +134,33 @@ function CoordinateTable({
 function CarValidationSection({ carValidation }) {
   if (!carValidation) return null
 
-  const statusLabel = {
-    not_loaded: 'Nao analisado',
-    clear: 'Sem sobreposicao',
-    overlap: 'Com sobreposicao',
-  }[carValidation.status] || 'Nao analisado'
+  const statusLabel = formatCarValidationStatusLabel(carValidation)
+  const matches = carValidation.inside?.length
+    ? carValidation.inside
+    : carValidation.partialOverlaps || []
+  const matchLabel = formatCarValidationMatches(matches)
+  const statusClass =
+    carValidation.status === 'inside'
+      ? 'car-validation-pill--inside'
+      : carValidation.status === 'partial'
+        ? 'car-validation-pill--partial'
+        : ''
 
   return (
     <div className="panel-section">
-      <div className="panel-section-title">Validacao CAR</div>
+      <div className="panel-section-title">Validacao CAR/KML</div>
+      <div className={`car-validation-pill ${statusClass}`}>
+        {statusLabel}
+      </div>
       <div className="details-grid">
-        <DetailRow label="Status" value={statusLabel} />
-        <DetailRow label="Sobreposicoes" value={carValidation.overlapCount} />
+        <DetailRow label="Relacoes" value={carValidation.overlapCount} />
+        <DetailRow label="Dentro" value={carValidation.insideCount || 0} />
+        <DetailRow label="Parcial" value={carValidation.partialOverlapCount || 0} />
       </div>
 
       <div className="details-grid details-grid--full">
         <DetailRow label="Base de referencia" value={carValidation.referenceFileName} />
+        <DetailRow label="CAR/KML identificado" value={matchLabel} />
         <DetailRow label="Resultado" value={carValidation.message} />
       </div>
     </div>
@@ -173,7 +210,7 @@ function SelfOverlapSection({ metrics }) {
 }
 
 function SummarySection({ properties, metrics }) {
-  const hasCarOverlap = properties.carOverlapValidation?.status === 'overlap'
+  const hasCarOverlap = ['inside', 'partial'].includes(properties.carOverlapValidation?.status)
   const hasSelfOverlap = (metrics.selfOverlapSegmentCount || 0) > 0 || (metrics.repeatedVertexIndexes?.length || 0) > 0
 
   return (

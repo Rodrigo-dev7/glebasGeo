@@ -10,6 +10,7 @@ import { validateCoordinateAgainstDataset } from '../services/coordinateValidati
 import { buildValidationReport, downloadValidationReport } from '../services/reportService'
 import { parseCarReferenceFile } from '../services/kmlGeoService'
 import { normalizeCarReferenceDataset } from '../services/carReferenceFeatureService'
+import { analyzeCarReferenceContainment } from '../services/carContainmentAnalysisService'
 import {
   applyCarOverlapValidationToFeature,
   applyCarOverlapValidationToFeatureCollection,
@@ -24,6 +25,30 @@ const EMPTY_DATASET = {
   features: [],
 }
 
+const STORAGE_PREFIX = 'glebasgeo:'
+
+function clearProjectBrowserStorage() {
+  if (typeof window === 'undefined') return
+
+  ;[window.localStorage, window.sessionStorage].forEach((storage) => {
+    if (!storage) return
+
+    try {
+      const keysToRemove = []
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index)
+        if (key?.startsWith(STORAGE_PREFIX)) {
+          keysToRemove.push(key)
+        }
+      }
+
+      keysToRemove.forEach((key) => storage.removeItem(key))
+    } catch {
+      // Navegadores podem bloquear Storage em modos restritos; a limpeza em memoria continua.
+    }
+  })
+}
+
 function createCarDatasetId(dataset) {
   return `${dataset.metadata.fileName}-${dataset.metadata.importedAt}`
 }
@@ -34,6 +59,73 @@ function createImportedDatasetViewportKey(dataset) {
   }
 
   return dataset.metadata.datasetKey || `${dataset.metadata.fileName}-${dataset.metadata.importedAt}`
+}
+
+function getSingleCarReferenceFeatureId(dataset) {
+  const features = dataset?.geojson?.features || []
+
+  if (features.length !== 1) {
+    return null
+  }
+
+  return features[0]?.properties?.id || null
+}
+
+function normalizeFileList(input) {
+  if (!input) return []
+  if (Array.isArray(input)) return input.filter(Boolean)
+  if (typeof input !== 'string' && typeof input.length === 'number') {
+    return Array.from(input).filter(Boolean)
+  }
+
+  return [input].filter(Boolean)
+}
+
+async function buildCarReferenceDatasetFromFile(file) {
+  const parsedDataset = await parseCarReferenceFile(file)
+
+  return normalizeCarReferenceDataset({
+    ...parsedDataset,
+    datasetId: createCarDatasetId(parsedDataset),
+  })
+}
+
+function buildCarReferenceValidationDataset(datasets = []) {
+  const features = datasets.flatMap((dataset) =>
+    (dataset.geojson?.features || []).map((feature) => ({
+      ...feature,
+      properties: {
+        ...feature.properties,
+        __carDatasetId: dataset.datasetId,
+        __carDatasetName: dataset.metadata?.fileName || feature.properties?.origem_arquivo || 'Base CAR/KML',
+        __carDatasetSourceType: dataset.metadata?.sourceType || feature.properties?.sourceType || null,
+        __carLayerKey: dataset.datasetId && feature.properties?.id
+          ? `${dataset.datasetId}::${feature.properties.id}`
+          : feature.properties?.id || null,
+      },
+    }))
+  )
+
+  if (!features.length) {
+    return null
+  }
+
+  return {
+    datasetId: '__all-car-reference-datasets__',
+    geojson: {
+      type: 'FeatureCollection',
+      features,
+    },
+    metadata: {
+      fileName: datasets.length === 1
+        ? datasets[0].metadata?.fileName || 'Base CAR/KML'
+        : `${datasets.length} bases CAR/KML`,
+      sourceType: 'car_reference_collection',
+      rowCount: features.length,
+      glebaCount: features.length,
+      datasetCount: datasets.length,
+    },
+  }
 }
 
 export function useGlebas() {
@@ -52,9 +144,19 @@ export function useGlebas() {
   const [matchedFeatureIds, setMatchedFeatureIds] = useState([])
   const [mapViewportRequest, setMapViewportRequest] = useState(null)
 
+  const carReferenceDatasetsWithContainment = useMemo(
+    () => analyzeCarReferenceContainment(carReferenceDatasets),
+    [carReferenceDatasets]
+  )
+
   const activeCarReferenceDataset = useMemo(
-    () => carReferenceDatasets.find((dataset) => dataset.datasetId === activeCarReferenceDatasetId) || null,
-    [activeCarReferenceDatasetId, carReferenceDatasets]
+    () => carReferenceDatasetsWithContainment.find((dataset) => dataset.datasetId === activeCarReferenceDatasetId) || null,
+    [activeCarReferenceDatasetId, carReferenceDatasetsWithContainment]
+  )
+
+  const carReferenceValidationDataset = useMemo(
+    () => buildCarReferenceValidationDataset(carReferenceDatasetsWithContainment),
+    [carReferenceDatasetsWithContainment]
   )
 
   const selectedCarReferenceFeature = useMemo(
@@ -69,15 +171,15 @@ export function useGlebas() {
   const activeDataset = importedDataset?.geojson || EMPTY_DATASET
 
   const applyCarValidationToDataset = useCallback(
-    (geojson, carDataset = activeCarReferenceDataset) =>
+    (geojson, carDataset = carReferenceValidationDataset) =>
       applyCarOverlapValidationToFeatureCollection(geojson, carDataset),
-    [activeCarReferenceDataset]
+    [carReferenceValidationDataset]
   )
 
   const applyCarValidationToFeature = useCallback(
-    (feature, carDataset = activeCarReferenceDataset) =>
+    (feature, carDataset = carReferenceValidationDataset) =>
       applyCarOverlapValidationToFeature(feature, carDataset),
-    [activeCarReferenceDataset]
+    [carReferenceValidationDataset]
   )
 
   const syncValidationStateForGeojson = useCallback((geojson) => {
@@ -90,7 +192,7 @@ export function useGlebas() {
     )
   }, [queryPoint])
 
-  const syncCarValidationState = useCallback((carDataset = activeCarReferenceDataset) => {
+  const syncCarValidationState = useCallback((carDataset = carReferenceValidationDataset) => {
     setImportedDataset((currentDataset) => {
       if (!currentDataset?.geojson) return currentDataset
 
@@ -105,7 +207,7 @@ export function useGlebas() {
         ? applyCarOverlapValidationToFeature(currentSelectedGleba, carDataset)
         : currentSelectedGleba
     ))
-  }, [activeCarReferenceDataset])
+  }, [carReferenceValidationDataset])
 
   const filteredData = useMemo(() => {
     if (activeFilter === 'todas') return activeDataset
@@ -220,49 +322,96 @@ export function useGlebas() {
     return true
   }, [applyCarValidationToDataset, importedDataset, syncValidationStateForGeojson])
 
-  const importCarReferenceDataset = useCallback(async (file) => {
-    if (!file) return
+  const importCarReferenceDataset = useCallback(async (input) => {
+    const files = normalizeFileList(input)
+    if (!files.length) return
 
     setIsImportingCar(true)
     setCarImportError('')
 
     try {
-      const parsedDataset = await parseCarReferenceFile(file)
-      const nextCarDataset = normalizeCarReferenceDataset({
-        ...parsedDataset,
-        datasetId: createCarDatasetId(parsedDataset),
-      })
+      const importResults = await Promise.all(
+        files.map(async (file) => {
+          try {
+            return {
+              dataset: await buildCarReferenceDatasetFromFile(file),
+              fileName: file.name,
+              error: null,
+            }
+          } catch (error) {
+            return {
+              dataset: null,
+              fileName: file.name || 'Arquivo CAR',
+              error,
+            }
+          }
+        })
+      )
+      const importedCarDatasets = importResults
+        .map((result) => result.dataset)
+        .filter(Boolean)
+      const failedImports = importResults.filter((result) => result.error)
 
-      setCarReferenceDatasets((currentDatasets) => [
-        nextCarDataset,
-        ...currentDatasets.filter((dataset) => dataset.datasetId !== nextCarDataset.datasetId),
-      ])
+      if (!importedCarDatasets.length) {
+        const [firstFailure] = failedImports
+        throw new Error(
+          firstFailure
+            ? `${firstFailure.fileName}: ${firstFailure.error?.message || 'Nao foi possivel processar este arquivo.'}`
+            : 'Nao foi possivel processar os arquivos KML/KMZ do CAR informados.'
+        )
+      }
+
+      const importedDatasetIds = new Set(
+        importedCarDatasets.map((dataset) => dataset.datasetId)
+      )
+      const nextCarDataset = importedCarDatasets[0]
+      const nextCarDatasets = [
+        ...importedCarDatasets,
+        ...carReferenceDatasets.filter((dataset) => !importedDatasetIds.has(dataset.datasetId)),
+      ]
+      setCarReferenceDatasets(nextCarDatasets)
       setActiveCarReferenceDatasetId(nextCarDataset.datasetId)
-      setSelectedCarReferenceFeatureId(null)
-      syncCarValidationState(nextCarDataset)
-      setMapViewportRequest({
-        type: 'car-reference',
-        datasetKey: nextCarDataset.datasetId,
-      })
+      const defaultFeatureId = getSingleCarReferenceFeatureId(nextCarDataset)
+      setSelectedCarReferenceFeatureId(defaultFeatureId)
+      syncCarValidationState(buildCarReferenceValidationDataset(nextCarDatasets))
+      setMapViewportRequest(
+        defaultFeatureId
+          ? {
+              type: 'car-feature',
+              datasetKey: nextCarDataset.datasetId,
+              featureId: defaultFeatureId,
+              requestKey: `${nextCarDataset.datasetId}-${defaultFeatureId}-${Date.now()}`,
+            }
+          : {
+              type: 'car-reference',
+              datasetKey: nextCarDataset.datasetId,
+              requestKey: `${nextCarDataset.datasetId}-${Date.now()}`,
+            }
+      )
+
+      if (failedImports.length) {
+        setCarImportError(
+          `Alguns arquivos nao foram importados: ${failedImports
+            .map((result) => `${result.fileName}: ${result.error?.message || 'erro desconhecido'}`)
+            .join(' | ')}`
+        )
+      }
     } catch (error) {
-      setCarImportError(error.message || 'Nao foi possivel processar o arquivo KML/KMZ do CAR informado.')
+      setCarImportError(error.message || 'Nao foi possivel processar o(s) arquivo(s) KML/KMZ do CAR informado(s).')
     } finally {
       setIsImportingCar(false)
     }
-  }, [syncCarValidationState])
+  }, [carReferenceDatasets, syncCarValidationState])
 
   const selectCarReferenceDataset = useCallback((datasetId) => {
     const nextCarDataset = carReferenceDatasets.find((dataset) => dataset.datasetId === datasetId)
     if (!nextCarDataset) return
 
     setActiveCarReferenceDatasetId(nextCarDataset.datasetId)
-    setSelectedCarReferenceFeatureId(null)
+    const defaultFeatureId = getSingleCarReferenceFeatureId(nextCarDataset)
+    setSelectedCarReferenceFeatureId(defaultFeatureId)
     setCarImportError('')
-    syncCarValidationState(nextCarDataset)
-    setMapViewportRequest({
-      type: 'car-reference',
-      datasetKey: `${nextCarDataset.datasetId}-${Date.now()}`,
-    })
+    syncCarValidationState()
   }, [carReferenceDatasets, syncCarValidationState])
 
   const selectCarReferenceFeature = useCallback((datasetId, featureId) => {
@@ -276,13 +425,7 @@ export function useGlebas() {
     setActiveCarReferenceDatasetId(nextCarDataset.datasetId)
     setSelectedCarReferenceFeatureId(nextFeature.properties.id)
     setCarImportError('')
-    syncCarValidationState(nextCarDataset)
-    setMapViewportRequest({
-      type: 'car-feature',
-      datasetKey: nextCarDataset.datasetId,
-      featureId: nextFeature.properties.id,
-      requestKey: `${nextCarDataset.datasetId}-${nextFeature.properties.id}-${Date.now()}`,
-    })
+    syncCarValidationState()
   }, [carReferenceDatasets, syncCarValidationState])
 
   const removeCarReferenceDataset = useCallback((datasetId) => {
@@ -295,15 +438,26 @@ export function useGlebas() {
     setCarReferenceDatasets(remainingDatasets)
     setActiveCarReferenceDatasetId(nextActiveCarDataset?.datasetId || null)
     if (removedWasActive) {
-      setSelectedCarReferenceFeatureId(null)
+      setSelectedCarReferenceFeatureId(getSingleCarReferenceFeatureId(nextActiveCarDataset))
     }
-    syncCarValidationState(nextActiveCarDataset)
+    syncCarValidationState(buildCarReferenceValidationDataset(remainingDatasets))
 
     if (nextActiveCarDataset) {
-      setMapViewportRequest({
-        type: 'car-reference',
-        datasetKey: `${nextActiveCarDataset.datasetId}-${Date.now()}`,
-      })
+      const defaultFeatureId = getSingleCarReferenceFeatureId(nextActiveCarDataset)
+      setMapViewportRequest(
+        defaultFeatureId
+          ? {
+              type: 'car-feature',
+              datasetKey: nextActiveCarDataset.datasetId,
+              featureId: defaultFeatureId,
+              requestKey: `${nextActiveCarDataset.datasetId}-${defaultFeatureId}-${Date.now()}`,
+            }
+          : {
+              type: 'car-reference',
+              datasetKey: nextActiveCarDataset.datasetId,
+              requestKey: `${nextActiveCarDataset.datasetId}-${Date.now()}`,
+            }
+      )
       return
     }
 
@@ -351,6 +505,25 @@ export function useGlebas() {
   const clearImportedDataset = useCallback(() => {
     setImportedDataset(null)
     setImportError('')
+    setValidationResult(null)
+    setQueryPoint(null)
+    setSelectedGleba(null)
+    setActiveFilter('todas')
+    setMatchedFeatureIds([])
+    setMapViewportRequest({
+      type: 'home',
+      requestKey: `home-${Date.now()}`,
+    })
+  }, [])
+
+  const clearApplicationData = useCallback(() => {
+    clearProjectBrowserStorage()
+    setImportedDataset(null)
+    setImportError('')
+    setCarReferenceDatasets([])
+    setActiveCarReferenceDatasetId(null)
+    setSelectedCarReferenceFeatureId(null)
+    setCarImportError('')
     setValidationResult(null)
     setQueryPoint(null)
     setSelectedGleba(null)
@@ -504,8 +677,9 @@ export function useGlebas() {
     importDataset,
     resetImportedDatasetCoordinates,
     clearImportedDataset,
+    clearApplicationData,
     carReferenceDataset: activeCarReferenceDataset,
-    carReferenceDatasets,
+    carReferenceDatasets: carReferenceDatasetsWithContainment,
     activeCarReferenceDatasetId,
     selectedCarReferenceFeature,
     selectedCarReferenceFeatureId,

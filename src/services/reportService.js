@@ -27,12 +27,14 @@ function formatStatusIndicator(status) {
 
 function formatCarStatusLabel(carValidation) {
   const status = carValidation?.status
+  const primaryType = carValidation?.primaryMatch?.referenceType || 'CAR/KML'
 
-  return {
-    not_loaded: 'Nao analisado',
-    clear: 'Sem sobreposicao',
-    overlap: 'Com sobreposicao',
-  }[status] || 'Nao analisado'
+  if (status === 'inside') return `Gleba dentro do ${primaryType}`
+  if (status === 'partial') return `Gleba parcialmente dentro do ${primaryType}`
+  if (status === 'clear') return 'Fora do CAR/KML'
+  if (status === 'not_loaded') return 'Nao analisado'
+
+  return 'Nao analisado'
 }
 
 function countInvalidCoordinates(coordinateStatuses = []) {
@@ -127,7 +129,10 @@ function buildValidationSummary(glebas = [], stats = null) {
     comCriticas: glebas.filter((gleba) => gleba.errorCount > 0).length,
     comAvisos: glebas.filter((gleba) => gleba.warningCount > 0).length,
     comSobreposicaoInterna: glebas.filter((gleba) => gleba.hasInternalOverlap === 'Sim').length,
-    comSobreposicaoCar: glebas.filter((gleba) => gleba.carStatus === 'Com sobreposicao').length,
+    comSobreposicaoCar: glebas.filter((gleba) =>
+      gleba.carStatus.startsWith('Gleba dentro') ||
+      gleba.carStatus.startsWith('Gleba parcialmente')
+    ).length,
     comCoordenadasInvalidas: glebas.filter((gleba) => gleba.invalidCoordinateCount > 0).length,
   }
 }

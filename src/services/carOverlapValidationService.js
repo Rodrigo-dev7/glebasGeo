@@ -13,29 +13,48 @@ function coordinatesEqual(left, right, tolerance = TOLERANCE) {
 function normalizeRing(ring = []) {
   if (!ring.length) return []
 
-  const normalized = ring.map(([lon, lat]) => [Number(lon), Number(lat)])
+  const normalized = ring
+    .map(([lon, lat]) => [Number(lon), Number(lat)])
+    .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat))
+
+  if (normalized.length < 2) return normalized
+
   const first = normalized[0]
   const last = normalized[normalized.length - 1]
 
-  if (coordinatesEqual(first, last)) {
-    return normalized.slice(0, -1)
-  }
-
-  return normalized
+  return coordinatesEqual(first, last)
+    ? normalized.slice(0, -1)
+    : normalized
 }
 
-function geometryToRings(geometry) {
+function geometryToPolygons(geometry) {
   if (!geometry) return []
 
   if (geometry.type === 'Polygon') {
-    return [normalizeRing(geometry.coordinates?.[0] || [])]
+    return [geometry.coordinates || []]
   }
 
   if (geometry.type === 'MultiPolygon') {
-    return (geometry.coordinates || []).map((polygon) => normalizeRing(polygon?.[0] || []))
+    return geometry.coordinates || []
   }
 
   return []
+}
+
+function geometryToRings(geometry) {
+  return geometryToPolygons(geometry).flatMap((polygon) =>
+    (polygon || []).map((ring) => normalizeRing(ring))
+  )
+}
+
+function geometryOuterRings(geometry) {
+  return geometryToPolygons(geometry)
+    .map((polygon) => normalizeRing(polygon?.[0] || []))
+    .filter((ring) => ring.length >= 3)
+}
+
+function collectGeometrySamplePoints(geometry) {
+  return geometryOuterRings(geometry).flat()
 }
 
 function crossProduct(origin, left, right) {
@@ -60,11 +79,14 @@ function pointOnSegment(point, start, end, tolerance = TOLERANCE) {
 }
 
 function pointInRing(point, ring) {
+  const normalizedRing = normalizeRing(ring)
+  if (normalizedRing.length < 3) return false
+
   let inside = false
 
-  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
-    const current = ring[index]
-    const prior = ring[previous]
+  for (let index = 0, previous = normalizedRing.length - 1; index < normalizedRing.length; previous = index++) {
+    const current = normalizedRing[index]
+    const prior = normalizedRing[previous]
 
     if (pointOnSegment(point, prior, current)) {
       return true
@@ -80,6 +102,20 @@ function pointInRing(point, ring) {
   }
 
   return inside
+}
+
+function pointInPolygon(point, polygon = []) {
+  const [outerRing, ...innerRings] = polygon
+
+  if (!pointInRing(point, outerRing || [])) {
+    return false
+  }
+
+  return !innerRings.some((ring) => pointInRing(point, ring))
+}
+
+function pointInGeometry(point, geometry) {
+  return geometryToPolygons(geometry).some((polygon) => pointInPolygon(point, polygon))
 }
 
 function segmentsIntersect(startA, endA, startB, endB) {
@@ -144,12 +180,111 @@ function geometriesOverlap(leftGeometry, rightGeometry) {
   )
 }
 
-function summarizeCarFeature(feature) {
-  return {
-    id: feature.properties?.id || null,
-    nome: feature.properties?.nome || 'Imovel CAR',
-    codigo: feature.properties?.cod_imovel || feature.properties?.codigo_imovel || null,
+function geometryContainsGeometry(containerGeometry, innerGeometry) {
+  const samplePoints = collectGeometrySamplePoints(innerGeometry)
+
+  if (!samplePoints.length) {
+    return false
   }
+
+  return samplePoints.every((point) => pointInGeometry(point, containerGeometry))
+}
+
+function getFeatureName(feature, fallback = 'Imovel CAR') {
+  const properties = feature?.properties || {}
+
+  return (
+    properties.nome ||
+    properties.numero_car_recibo ||
+    properties.codigo_imovel ||
+    properties.cod_imovel ||
+    properties.car ||
+    properties.id ||
+    fallback
+  )
+}
+
+function resolveReferenceType(feature, metadata = null) {
+  const properties = feature?.properties || {}
+  const sourceType = String(
+    properties.__carDatasetSourceType ||
+    properties.sourceType ||
+    metadata?.sourceType ||
+    ''
+  ).toLowerCase()
+
+  if (
+    properties.numero_car_recibo ||
+    properties.codigo_imovel ||
+    properties.cod_imovel ||
+    sourceType.includes('car') ||
+    sourceType.includes('shp')
+  ) {
+    return 'CAR'
+  }
+
+  return 'KML'
+}
+
+function getLayerKey(feature) {
+  const properties = feature?.properties || {}
+  const featureId = properties.id || null
+  const datasetId = properties.__carDatasetId || null
+
+  if (properties.__carLayerKey) return properties.__carLayerKey
+  if (!featureId) return null
+
+  return datasetId ? `${datasetId}::${featureId}` : featureId
+}
+
+function summarizeCarFeature(feature, relation, metadata = null) {
+  const properties = feature.properties || {}
+  const referenceType = resolveReferenceType(feature, metadata)
+
+  return {
+    id: properties.id || null,
+    nome: getFeatureName(feature),
+    codigo: properties.numero_car_recibo || properties.cod_imovel || properties.codigo_imovel || null,
+    datasetId: properties.__carDatasetId || metadata?.datasetId || null,
+    datasetName: properties.__carDatasetName || properties.origem_arquivo || metadata?.fileName || null,
+    layerKey: getLayerKey(feature),
+    relation,
+    relationLabel: relation === 'inside'
+      ? `Gleba dentro do ${referenceType}`
+      : `Gleba parcialmente dentro do ${referenceType}`,
+    referenceType,
+  }
+}
+
+function formatReferenceList(matches = []) {
+  return matches
+    .map((match) => match.nome || match.datasetName || null)
+    .filter(Boolean)
+    .join(' | ')
+}
+
+function formatRelationshipMessage(inside = [], partial = []) {
+  if (inside.length) {
+    const [primary] = inside
+    const typeLabel = primary.referenceType || 'CAR/KML'
+    const names = formatReferenceList(inside)
+
+    return inside.length === 1
+      ? `Gleba dentro do ${typeLabel}: ${names || 'imovel identificado'}.`
+      : `Gleba dentro de ${inside.length} poligono(s) CAR/KML: ${names}.`
+  }
+
+  if (partial.length) {
+    const [primary] = partial
+    const typeLabel = primary.referenceType || 'CAR/KML'
+    const names = formatReferenceList(partial)
+
+    return partial.length === 1
+      ? `Gleba parcialmente dentro do ${typeLabel}: ${names || 'imovel identificado'}.`
+      : `Gleba parcialmente dentro de ${partial.length} poligono(s) CAR/KML: ${names}.`
+  }
+
+  return 'Nenhuma relacao espacial encontrada com as bases CAR/KML carregadas.'
 }
 
 export function buildCarOverlapValidation(feature, carGeojson, metadata = null) {
@@ -157,25 +292,47 @@ export function buildCarOverlapValidation(feature, carGeojson, metadata = null) 
     return {
       status: 'not_loaded',
       overlapCount: 0,
+      insideCount: 0,
+      partialOverlapCount: 0,
       overlaps: [],
+      inside: [],
+      partialOverlaps: [],
+      primaryMatch: null,
       referenceFileName: metadata?.fileName || null,
-      message: 'Nenhuma base KML do CAR foi carregada para a analise de sobreposicao.',
+      message: 'Nenhuma base CAR/KML foi carregada para a analise espacial.',
       validatedAt: new Date().toISOString(),
     }
   }
 
-  const overlaps = carGeojson.features
-    .filter((carFeature) => geometriesOverlap(feature.geometry, carFeature.geometry))
-    .map(summarizeCarFeature)
+  const relations = carGeojson.features
+    .map((carFeature) => {
+      if (geometryContainsGeometry(carFeature.geometry, feature.geometry)) {
+        return summarizeCarFeature(carFeature, 'inside', metadata)
+      }
+
+      if (geometriesOverlap(feature.geometry, carFeature.geometry)) {
+        return summarizeCarFeature(carFeature, 'partial', metadata)
+      }
+
+      return null
+    })
+    .filter(Boolean)
+
+  const inside = relations.filter((relation) => relation.relation === 'inside')
+  const partialOverlaps = relations.filter((relation) => relation.relation === 'partial')
+  const status = inside.length ? 'inside' : partialOverlaps.length ? 'partial' : 'clear'
 
   return {
-    status: overlaps.length ? 'overlap' : 'clear',
-    overlapCount: overlaps.length,
-    overlaps,
+    status,
+    overlapCount: relations.length,
+    insideCount: inside.length,
+    partialOverlapCount: partialOverlaps.length,
+    overlaps: relations,
+    inside,
+    partialOverlaps,
+    primaryMatch: inside[0] || partialOverlaps[0] || null,
     referenceFileName: metadata?.fileName || null,
-    message: overlaps.length
-      ? `Sobreposicao detectada com ${overlaps.length} imovel(is) do CAR.`
-      : 'Nenhuma sobreposicao encontrada com a base KML do CAR.',
+    message: formatRelationshipMessage(inside, partialOverlaps),
     validatedAt: new Date().toISOString(),
   }
 }

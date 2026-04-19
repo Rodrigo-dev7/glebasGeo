@@ -18,6 +18,37 @@ function buildCoordinateReference(properties, coordinate, displayIndex) {
   }
 }
 
+function getCarValidationBadge(carValidation) {
+  const primaryType = carValidation?.primaryMatch?.referenceType || 'CAR/KML'
+
+  if (carValidation?.status === 'inside') {
+    return {
+      className: 'is-inside-car',
+      label: `Dentro do ${primaryType}`,
+    }
+  }
+
+  if (carValidation?.status === 'partial') {
+    return {
+      className: 'is-partial-car',
+      label: `Parcial no ${primaryType}`,
+    }
+  }
+
+  return null
+}
+
+function formatCarValidationMatches(carValidation) {
+  const matches = carValidation?.inside?.length
+    ? carValidation.inside
+    : carValidation?.partialOverlaps || []
+
+  return matches
+    .map((match) => match.nome || match.datasetName || match.codigo || null)
+    .filter(Boolean)
+    .join(' | ')
+}
+
 function GlebaAccordionCard({
   gleba,
   isExpanded,
@@ -29,6 +60,8 @@ function GlebaAccordionCard({
   const properties = gleba.properties || {}
   const statusMeta = STATUS_META[properties.status] || STATUS_META.pendente
   const coordinateStatuses = properties.coordinateStatuses || []
+  const carValidationBadge = getCarValidationBadge(properties.carOverlapValidation)
+  const carValidationMatches = formatCarValidationMatches(properties.carOverlapValidation)
 
   return (
     <article
@@ -47,6 +80,11 @@ function GlebaAccordionCard({
               {statusMeta.label}
             </span>
             <span className="gleba-accordion-id">{properties.id}</span>
+            {carValidationBadge && (
+              <span className={`gleba-accordion-car-badge ${carValidationBadge.className}`}>
+                {carValidationBadge.label}
+              </span>
+            )}
           </div>
         </div>
 
@@ -82,6 +120,18 @@ function GlebaAccordionCard({
               <span>UF</span>
               <strong>{properties.uf || '-'}</strong>
             </div>
+            {carValidationBadge && (
+              <div className="gleba-accordion-field gleba-accordion-field--full gleba-accordion-field--car">
+                <span>Validacao CAR/KML</span>
+                <strong>{properties.carOverlapValidation?.message || carValidationBadge.label}</strong>
+              </div>
+            )}
+            {carValidationMatches && (
+              <div className="gleba-accordion-field gleba-accordion-field--full">
+                <span>Contido em</span>
+                <strong>{carValidationMatches}</strong>
+              </div>
+            )}
           </div>
 
           {coordinateStatuses.length > 0 && (

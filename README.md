@@ -10,7 +10,7 @@ O projeto foi construido com React + Vite e usa Leaflet para renderizacao do map
 2. normalizar os dados para GeoJSON
 3. aplicar validacoes geometricas no padrao do fluxo SICOR
 4. enriquecer a gleba com area, municipio e UF
-5. comparar a gleba com uma base CAR em KML/KMZ
+5. comparar a gleba com uma base CAR em KML/KMZ/SHP
 6. consultar coordenadas contra a base carregada
 7. editar vertices diretamente no mapa
 8. exportar um relatorio consolidado em `.xlsx`
@@ -18,7 +18,7 @@ O projeto foi construido com React + Vite e usa Leaflet para renderizacao do map
 ## Funcionalidades atuais
 
 - Importacao de glebas em `.xls`, `.xlsx`, `.geojson` e `.json`
-- Importacao de bases CAR em `.kml` e `.kmz`
+- Importacao de bases CAR em `.kml`, `.kmz` e `.shp`
 - Mapa interativo com alternancia entre base escura e satelite
 - Lista lateral de glebas com filtros por status
 - Selecao de uma ou mais bases CAR, com escolha da base ativa
@@ -55,6 +55,7 @@ O projeto tambem possui um servico legado de validacao geral para estatisticas e
 
 - `.kml`
 - `.kmz`
+- `.shp`
 
 ### Saida
 
@@ -115,7 +116,7 @@ npm run preview
 
 ### 4. Analise CAR
 
-- Bases KML/KMZ sao convertidas para GeoJSON em `src/services/kmlGeoService.js`
+- Bases KML/KMZ/SHP sao convertidas para GeoJSON em `src/services/kmlGeoService.js`
 - A sobreposicao com CAR ativo e aplicada em `src/services/carOverlapValidationService.js`
 
 ### 5. Consulta por coordenada
@@ -172,7 +173,7 @@ Base-GeoServer/
 - `src/components/CoordinateValidationPanel.jsx`: importacao de arquivos, biblioteca CAR e formulario de consulta
 - `src/services/datasetImportService.js`: pipeline de entrada da base principal
 - `src/services/excelGeoService.js`: leitura de planilhas e agrupamento das glebas
-- `src/services/kmlGeoService.js`: leitura de KML/KMZ do CAR
+- `src/services/kmlGeoService.js`: leitura de KML/KMZ/SHP do CAR
 - `src/services/sicorGlebaValidationService.js`: validacao geometrica da gleba
 - `src/services/carOverlapValidationService.js`: cruzamento entre gleba e base CAR ativa
 - `src/services/reportService.js`: geracao do relatorio em Excel

@@ -41,6 +41,7 @@ export default function Sidebar({
   isImporting,
   importDataset,
   clearImportedDataset,
+  clearApplicationData,
   carReferenceDataset,
   carReferenceDatasets,
   activeCarReferenceDatasetId,
@@ -196,6 +197,7 @@ export default function Sidebar({
           isImporting={isImporting}
           importDataset={importDataset}
           clearImportedDataset={clearImportedDataset}
+          clearApplicationData={clearApplicationData}
           carReferenceDataset={carReferenceDataset}
           carReferenceDatasets={carReferenceDatasets}
           activeCarReferenceDatasetId={activeCarReferenceDatasetId}

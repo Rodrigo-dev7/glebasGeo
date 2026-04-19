@@ -18,6 +18,7 @@ export default function App() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [pointDisplayMode, setPointDisplayMode] = useState('marked')
   const [activeVertexReference, setActiveVertexReference] = useState(null)
+  const [isMapHeaderCollapsed, setIsMapHeaderCollapsed] = useState(false)
   const {
     glebas,
     allGlebas,
@@ -32,6 +33,7 @@ export default function App() {
     importDataset,
     resetImportedDatasetCoordinates,
     clearImportedDataset,
+    clearApplicationData,
     carReferenceDataset,
     carReferenceDatasets,
     activeCarReferenceDatasetId,
@@ -104,6 +106,12 @@ export default function App() {
     }
   }
 
+  const handleClearApplicationData = () => {
+    clearApplicationData()
+    setPointDisplayMode('marked')
+    setActiveVertexReference(null)
+  }
+
   return (
     <div className="app">
       <div className={`app-body${!isSidebarVisible ? ' app-body--sidebar-collapsed' : ''}`}>
@@ -128,6 +136,7 @@ export default function App() {
           isImporting={isImporting}
           importDataset={importDataset}
           clearImportedDataset={clearImportedDataset}
+          clearApplicationData={handleClearApplicationData}
           carReferenceDataset={carReferenceDataset}
           carReferenceDatasets={carReferenceDatasets}
           activeCarReferenceDatasetId={activeCarReferenceDatasetId}
@@ -162,6 +171,8 @@ export default function App() {
             stats={stats}
             pointDisplayMode={pointDisplayMode}
             setPointDisplayMode={handlePointDisplayModeChange}
+            collapsed={isMapHeaderCollapsed}
+            onCollapsedChange={setIsMapHeaderCollapsed}
           />
           <MapView
             glebas={allGlebas}
@@ -180,7 +191,7 @@ export default function App() {
             viewportRequest={mapViewportRequest}
             updateFeatureCoordinates={updateFeatureCoordinates}
             updateSelectedGlebaCoordinates={updateSelectedGlebaCoordinates}
-            layoutRevision={isSidebarVisible}
+            layoutRevision={`${isSidebarVisible}-${isMapHeaderCollapsed}`}
             pointDisplayMode={pointDisplayMode}
           />
         </main>

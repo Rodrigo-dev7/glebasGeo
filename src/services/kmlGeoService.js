@@ -1,6 +1,13 @@
 const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50
 const ZIP_CENTRAL_DIRECTORY_SIGNATURE = 0x02014b50
 const ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50
+const SHP_FILE_CODE = 9994
+const SHP_SHAPE_TYPES = {
+  NULL: 0,
+  POLYGON: 5,
+  POLYGON_Z: 15,
+  POLYGON_M: 25,
+}
 import { lookupMunicipalityAndState } from './adminBoundaryService'
 import { normalizeCarReferenceDataset } from './carReferenceFeatureService'
 import { calculatePolygonAreaHectares } from './glebaEnrichmentService'
@@ -284,6 +291,208 @@ async function parseKmlText(text, fileName) {
   })
 }
 
+function getBaseFileName(fileName) {
+  return String(fileName || 'Arquivo SHP').replace(/\.[^.]+$/, '')
+}
+
+function isSupportedShpPolygonType(shapeType) {
+  return [
+    SHP_SHAPE_TYPES.POLYGON,
+    SHP_SHAPE_TYPES.POLYGON_Z,
+    SHP_SHAPE_TYPES.POLYGON_M,
+  ].includes(shapeType)
+}
+
+function readShpHeader(view) {
+  if (view.byteLength < 100) {
+    throw new Error('O arquivo SHP informado nao possui cabecalho valido.')
+  }
+
+  const fileCode = view.getInt32(0, false)
+  if (fileCode !== SHP_FILE_CODE) {
+    throw new Error('O arquivo informado nao possui assinatura valida de Shapefile.')
+  }
+
+  return {
+    shapeType: view.getInt32(32, true),
+  }
+}
+
+function parseShpPoint(view, offset) {
+  return [
+    view.getFloat64(offset, true),
+    view.getFloat64(offset + 8, true),
+  ]
+}
+
+function parseShpPolygonGeometry(view, contentOffset, contentEnd) {
+  if (contentOffset + 44 > contentEnd) {
+    return null
+  }
+
+  const numParts = view.getInt32(contentOffset + 36, true)
+  const numPoints = view.getInt32(contentOffset + 40, true)
+  const partsOffset = contentOffset + 44
+  const pointsOffset = partsOffset + numParts * 4
+
+  if (
+    numParts <= 0 ||
+    numPoints <= 0 ||
+    pointsOffset + numPoints * 16 > contentEnd
+  ) {
+    return null
+  }
+
+  const partStarts = []
+  for (let index = 0; index < numParts; index += 1) {
+    partStarts.push(view.getInt32(partsOffset + index * 4, true))
+  }
+
+  const points = []
+  for (let index = 0; index < numPoints; index += 1) {
+    points.push(parseShpPoint(view, pointsOffset + index * 16))
+  }
+
+  const rings = partStarts
+    .map((startIndex, index) => {
+      const endIndex = partStarts[index + 1] ?? points.length
+      return ensureClosedRing(points.slice(startIndex, endIndex))
+    })
+    .filter((ring) => ring.length >= 4)
+
+  if (!rings.length) {
+    return null
+  }
+
+  return rings.length === 1
+    ? {
+        type: 'Polygon',
+        coordinates: [rings[0]],
+      }
+    : {
+        type: 'MultiPolygon',
+        coordinates: rings.map((ring) => [ring]),
+      }
+}
+
+function geometryOuterRings(geometry) {
+  if (!geometry) return []
+
+  if (geometry.type === 'Polygon') {
+    return [geometry.coordinates?.[0] || []]
+  }
+
+  if (geometry.type === 'MultiPolygon') {
+    return (geometry.coordinates || []).map((polygon) => polygon?.[0] || [])
+  }
+
+  return []
+}
+
+function parseShpFeatures(arrayBuffer) {
+  const view = new DataView(arrayBuffer)
+  const header = readShpHeader(view)
+
+  if (
+    header.shapeType !== SHP_SHAPE_TYPES.NULL &&
+    !isSupportedShpPolygonType(header.shapeType)
+  ) {
+    throw new Error('O SHP informado nao e de poligonos. Use um Shapefile de area.')
+  }
+
+  const features = []
+  let offset = 100
+
+  while (offset + 8 <= view.byteLength) {
+    const recordNumber = view.getInt32(offset, false)
+    const contentLengthBytes = view.getInt32(offset + 4, false) * 2
+    const contentOffset = offset + 8
+    const contentEnd = Math.min(contentOffset + contentLengthBytes, view.byteLength)
+
+    if (contentOffset + 4 > contentEnd) {
+      break
+    }
+
+    const shapeType = view.getInt32(contentOffset, true)
+    if (shapeType !== SHP_SHAPE_TYPES.NULL) {
+      if (!isSupportedShpPolygonType(shapeType)) {
+        throw new Error('O SHP informado possui geometria nao suportada. Use poligonos.')
+      }
+
+      const geometry = parseShpPolygonGeometry(view, contentOffset, contentEnd)
+      if (geometry) {
+        features.push({
+          recordNumber,
+          geometry,
+        })
+      }
+    }
+
+    offset = contentEnd
+  }
+
+  return features
+}
+
+async function buildShpFeature({ geometry, index, recordNumber, fileName }) {
+  const baseName = getBaseFileName(fileName)
+  const outerRings = geometryOuterRings(geometry)
+  const flattenedCoordinates = flattenPolygons(outerRings)
+  const boundaryInfo = await lookupMunicipalityAndState(flattenedCoordinates)
+  const areaHa = calculateMultiPolygonAreaHectares(outerRings)
+  const suffix = recordNumber || index + 1
+
+  return {
+    type: 'Feature',
+    properties: {
+      id: `SHP-${slugify(baseName)}-${suffix}`,
+      nome: outerRings.length > 1 || index > 0 ? `${baseName} ${suffix}` : baseName,
+      numero_car_recibo: null,
+      municipio: boundaryInfo?.municipio || null,
+      uf: boundaryInfo?.uf || null,
+      area: areaHa,
+      areaCalculada: areaHa,
+      areaInformada: null,
+      descricao: null,
+      origem_arquivo: fileName,
+      sourceType: 'shp_car',
+    },
+    geometry,
+  }
+}
+
+async function parseShpFile(file) {
+  const shpFeatures = parseShpFeatures(await file.arrayBuffer())
+
+  if (!shpFeatures.length) {
+    throw new Error('Nao encontrei poligonos validos no arquivo SHP informado.')
+  }
+
+  const features = await Promise.all(
+    shpFeatures.map((feature, index) =>
+      buildShpFeature({
+        ...feature,
+        index,
+        fileName: file.name,
+      })
+    )
+  )
+
+  return normalizeCarReferenceDataset({
+    geojson: {
+      type: 'FeatureCollection',
+      features,
+    },
+    metadata: {
+      fileName: file.name,
+      sourceType: 'shp_car',
+      rowCount: features.length,
+      glebaCount: features.length,
+      importedAt: new Date().toISOString(),
+    },
+  })
+}
+
 function decodeZipText(bytes) {
   const utf8Decoder = new TextDecoder('utf-8', { fatal: false })
   return utf8Decoder.decode(bytes)
@@ -426,5 +635,9 @@ export async function parseCarReferenceFile(file) {
     }
   }
 
-  throw new Error('Formato nao suportado para a base do CAR. Use KML (.kml) ou KMZ (.kmz).')
+  if (lowerName.endsWith('.shp')) {
+    return parseShpFile(file)
+  }
+
+  throw new Error('Formato nao suportado para a base do CAR. Use KML (.kml), KMZ (.kmz) ou SHP (.shp).')
 }

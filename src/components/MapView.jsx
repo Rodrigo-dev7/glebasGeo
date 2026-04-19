@@ -95,6 +95,22 @@ const MATCHED_OVERRIDES = {
   weight: 4.5,
 }
 
+const GLEBA_INSIDE_REFERENCE_STYLE = {
+  color: '#facc15',
+  fillColor: '#facc15',
+  fillOpacity: 0.42,
+  weight: 4.4,
+  dashArray: '5 4',
+}
+
+const GLEBA_PARTIAL_REFERENCE_STYLE = {
+  color: '#fb923c',
+  fillColor: '#f59e0b',
+  fillOpacity: 0.34,
+  weight: 3.8,
+  dashArray: '10 5',
+}
+
 const CAR_REFERENCE_STYLE = {
   color: '#c084fc',
   fillColor: '#a855f7',
@@ -116,10 +132,32 @@ const CAR_REFERENCE_MATCHED_STYLE = {
 const CAR_REFERENCE_SELECTED_STYLE = {
   color: '#f8fafc',
   fillColor: '#38bdf8',
-  fillOpacity: 0.26,
+  fillOpacity: 0.22,
   opacity: 1,
-  weight: 5.2,
+  weight: 3,
   dashArray: null,
+}
+
+const CAR_REFERENCE_ACTIVE_DATASET_STYLE = {
+  fillOpacity: 0.18,
+  opacity: 1,
+  weight: 3.4,
+}
+
+const CAR_REFERENCE_CONTAINED_STYLE = {
+  color: '#facc15',
+  fillColor: '#fde047',
+  fillOpacity: 0.3,
+  opacity: 1,
+  weight: 3.4,
+  dashArray: '3 5',
+}
+
+const CAR_REFERENCE_CONTAINER_STYLE = {
+  fillOpacity: 0.06,
+  opacity: 0.9,
+  weight: 2.6,
+  dashArray: '12 6',
 }
 
 const CAR_REFERENCE_DIMMED_STYLE = {
@@ -169,6 +207,19 @@ const PERSISTENT_POPUP_OPTIONS = {
   maxWidth: 280,
   autoClose: false,
   closeOnClick: false,
+}
+
+const CAR_REFERENCE_POPUP_OPTIONS = {
+  ...PERSISTENT_POPUP_OPTIONS,
+  autoPan: false,
+}
+
+const CAR_SELECTION_POPUP_OPTIONS = {
+  className: 'custom-popup car-selector-popup-shell',
+  maxWidth: 360,
+  autoClose: true,
+  closeOnClick: true,
+  autoPan: false,
 }
 
 // Small threshold to keep a simple click from entering the heavier drag path.
@@ -486,6 +537,45 @@ function formatArea(area) {
   return typeof area === 'number' ? `${area} ha` : '-'
 }
 
+function formatRelationList(relations = []) {
+  return relations
+    .map((relation) => relation.datasetName || relation.featureName || null)
+    .filter(Boolean)
+    .join(' | ')
+}
+
+function formatCarValidationStatusLabel(carValidation) {
+  const status = carValidation?.status
+  const primaryType = carValidation?.primaryMatch?.referenceType || 'CAR/KML'
+
+  if (status === 'inside') {
+    return `Gleba dentro do ${primaryType}`
+  }
+
+  if (status === 'partial') {
+    return `Gleba parcialmente dentro do ${primaryType}`
+  }
+
+  if (status === 'clear') {
+    return 'Gleba fora do CAR/KML'
+  }
+
+  return 'Nao analisado'
+}
+
+function formatCarValidationMatches(matches = []) {
+  return matches
+    .map((match) => match.nome || match.datasetName || match.codigo || null)
+    .filter(Boolean)
+    .join(' | ')
+}
+
+function getCarValidationPopupClass(status) {
+  if (status === 'inside') return 'popup-cell--gleba-inside'
+  if (status === 'partial') return 'popup-cell--gleba-partial'
+  return ''
+}
+
 function normalizeNumericArea(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value
@@ -636,10 +726,12 @@ function popupMarkup(feature, areaOverride = null) {
   const area = resolvePopupArea(feature, areaOverride)
   const carValidation = properties.carOverlapValidation
   const showCarValidation = carValidation?.status && carValidation.status !== 'not_loaded'
-  const carStatusLabel =
-    carValidation?.status === 'overlap'
-      ? 'Gleba dentro do CAR'
-      : 'Gleba fora do CAR'
+  const carStatusLabel = formatCarValidationStatusLabel(carValidation)
+  const carMatchLabel = formatCarValidationMatches(carValidation?.inside?.length
+    ? carValidation.inside
+    : carValidation?.partialOverlaps || []
+  )
+  const carValidationClass = getCarValidationPopupClass(carValidation?.status)
 
   return `
     <div class="gleba-popup">
@@ -660,18 +752,48 @@ function popupMarkup(feature, areaOverride = null) {
           <span class="pcell-val pcell-mono">${escapeHtml(properties.municipio || '-')} ${properties.uf ? `/ ${escapeHtml(properties.uf)}` : ''}</span>
         </div>
         ${showCarValidation ? `
-          <div class="popup-cell popup-cell--full">
-            <span class="pcell-label">Validacao CAR</span>
+          <div class="popup-cell popup-cell--full ${carValidationClass}">
+            <span class="pcell-label">Validacao CAR/KML</span>
             <span class="pcell-val">${escapeHtml(carStatusLabel)}</span>
           </div>
+          ${carMatchLabel ? `
+            <div class="popup-cell popup-cell--full ${carValidationClass}">
+              <span class="pcell-label">Contido em</span>
+              <span class="pcell-val">${escapeHtml(carMatchLabel)}</span>
+            </div>
+          ` : ''}
         ` : ''}
       </div>
     </div>
   `
 }
 
+function glebaReferenceTooltipMarkup(feature) {
+  const carValidation = feature?.properties?.carOverlapValidation
+
+  if (!['inside', 'partial'].includes(carValidation?.status)) {
+    return null
+  }
+
+  const statusLabel = formatCarValidationStatusLabel(carValidation)
+  const matchLabel = formatCarValidationMatches(carValidation.inside?.length
+    ? carValidation.inside
+    : carValidation.partialOverlaps || []
+  )
+
+  return `
+    <div class="gleba-relation-map-badge">
+      <strong>${escapeHtml(statusLabel)}</strong>
+      ${matchLabel ? `<span>${escapeHtml(matchLabel)}</span>` : ''}
+    </div>
+  `
+}
+
 function carReferencePopupMarkup(feature) {
   const properties = feature.properties || {}
+  const containment = properties.kmlContainment || {}
+  const insideLabel = formatRelationList(containment.inside || [])
+  const containsLabel = formatRelationList(containment.contains || [])
   const carNumber =
     properties.numero_car_recibo ||
     properties.cod_imovel ||
@@ -720,6 +842,18 @@ function carReferencePopupMarkup(feature) {
           <span class="pcell-label">&Aacute;rea</span>
           <span class="pcell-val">${escapeHtml(formatArea(resolvedArea))}</span>
         </div>
+        ${insideLabel ? `
+          <div class="popup-cell popup-cell--full popup-cell--contained">
+            <span class="pcell-label">KML dentro de</span>
+            <span class="pcell-val">${escapeHtml(insideLabel)}</span>
+          </div>
+        ` : ''}
+        ${containsLabel ? `
+          <div class="popup-cell popup-cell--full popup-cell--contains">
+            <span class="pcell-label">Contem KML</span>
+            <span class="pcell-val">${escapeHtml(containsLabel)}</span>
+          </div>
+        ` : ''}
       </div>
     </div>
   `
@@ -727,21 +861,276 @@ function carReferencePopupMarkup(feature) {
 
 function featureStyle(feature, selectedId, matchedFeatureIds) {
   const base = STATUS_STYLES[feature.properties.status] || STATUS_STYLES.pendente
+  const carValidationStatus = feature.properties.carOverlapValidation?.status
+  const relationStyle =
+    carValidationStatus === 'inside'
+      ? GLEBA_INSIDE_REFERENCE_STYLE
+      : carValidationStatus === 'partial'
+        ? GLEBA_PARTIAL_REFERENCE_STYLE
+        : null
 
   if (matchedFeatureIds.includes(feature.properties.id)) {
-    return { ...base, ...MATCHED_OVERRIDES }
+    return relationStyle
+      ? { ...base, ...relationStyle, fillOpacity: 0.5, weight: 5 }
+      : { ...base, ...MATCHED_OVERRIDES }
   }
 
   if (feature.properties.id === selectedId) {
-    return { ...base, ...SELECTED_OVERRIDES }
+    return relationStyle
+      ? { ...base, ...relationStyle, fillOpacity: 0.54, weight: 5.2 }
+      : { ...base, ...SELECTED_OVERRIDES }
   }
 
-  return base
+  return relationStyle ? { ...base, ...relationStyle } : base
 }
 
 function getCarFeatureLayerKey(datasetId, featureId) {
   if (!featureId) return null
   return datasetId ? `${datasetId}::${featureId}` : featureId
+}
+
+function getCarFeatureDisplayName(feature, fallbackIndex = null) {
+  const properties = feature?.properties || {}
+
+  return (
+    properties.nome ||
+    properties.numero_car_recibo ||
+    properties.codigo_imovel ||
+    properties.cod_imovel ||
+    properties.car ||
+    properties.id ||
+    (Number.isInteger(fallbackIndex) ? `Imovel CAR ${fallbackIndex + 1}` : 'Imovel CAR')
+  )
+}
+
+function getCarFeatureDisplayCode(feature) {
+  const properties = feature?.properties || {}
+
+  return (
+    properties.numero_car_recibo ||
+    properties.codigo_imovel ||
+    properties.cod_imovel ||
+    properties.car ||
+    null
+  )
+}
+
+function calculateGeometryAreaHectares(geometry) {
+  if (!geometry) return null
+
+  if (geometry.type === 'Polygon') {
+    return calculatePolygonAreaHectares(geometry.coordinates?.[0] || [])
+  }
+
+  if (geometry.type === 'MultiPolygon') {
+    const area = (geometry.coordinates || []).reduce(
+      (total, polygon) => total + (calculatePolygonAreaHectares(polygon?.[0] || []) || 0),
+      0
+    )
+
+    return area ? Number(area.toFixed(2)) : null
+  }
+
+  return null
+}
+
+function pointOnLonLatSegment(point, start, end, tolerance = COORDINATE_MATCH_TOLERANCE) {
+  if (!point || !start || !end) return false
+
+  const cross =
+    (point[1] - start[1]) * (end[0] - start[0]) -
+    (point[0] - start[0]) * (end[1] - start[1])
+
+  if (Math.abs(cross) > tolerance) return false
+
+  const dot =
+    (point[0] - start[0]) * (end[0] - start[0]) +
+    (point[1] - start[1]) * (end[1] - start[1])
+
+  if (dot < -tolerance) return false
+
+  const squaredLength =
+    (end[0] - start[0]) ** 2 +
+    (end[1] - start[1]) ** 2
+
+  return dot - squaredLength <= tolerance
+}
+
+function pointInLonLatRing(point, ring = []) {
+  if (ring.length < 3) return false
+
+  let inside = false
+
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
+    const current = ring[index]
+    const prior = ring[previous]
+
+    if (pointOnLonLatSegment(point, prior, current)) {
+      return true
+    }
+
+    const [xi, yi] = current
+    const [xj, yj] = prior
+    const intersects =
+      yi > point[1] !== yj > point[1] &&
+      point[0] < ((xj - xi) * (point[1] - yi)) / ((yj - yi) || Number.EPSILON) + xi
+
+    if (intersects) inside = !inside
+  }
+
+  return inside
+}
+
+function pointInPolygonCoordinates(point, polygon = []) {
+  const [outerRing, ...innerRings] = polygon
+
+  if (!pointInLonLatRing(point, outerRing || [])) {
+    return false
+  }
+
+  return !innerRings.some((ring) => pointInLonLatRing(point, ring))
+}
+
+function pointInCarReferenceGeometry(latlng, geometry) {
+  if (!latlng || !geometry) return false
+
+  const point = [latlng.lng, latlng.lat]
+
+  if (geometry.type === 'Polygon') {
+    return pointInPolygonCoordinates(point, geometry.coordinates || [])
+  }
+
+  if (geometry.type === 'MultiPolygon') {
+    return (geometry.coordinates || []).some((polygon) =>
+      pointInPolygonCoordinates(point, polygon)
+    )
+  }
+
+  return false
+}
+
+function buildCarFeatureSelectionMeta(feature, area) {
+  const properties = feature?.properties || {}
+  const datasetName = properties.__carDatasetName || properties.origem_arquivo || null
+  const code = getCarFeatureDisplayCode(feature)
+  const municipalityUf = [properties.municipio, properties.uf].filter(Boolean).join(' / ')
+  const resolvedArea = normalizeNumericArea(properties.area) ?? area
+  const areaLabel = typeof resolvedArea === 'number' ? formatArea(resolvedArea) : null
+
+  return [datasetName, code, municipalityUf, areaLabel].filter(Boolean).join(' | ')
+}
+
+function collectCarReferenceCandidatesAtLatLng(latlng, featureLayers) {
+  if (!latlng || !featureLayers?.size) return []
+
+  const candidates = []
+
+  featureLayers.forEach((layer, layerKey) => {
+    const feature = layer.feature
+    const properties = feature?.properties || {}
+    const featureId = properties.id
+    const datasetId = properties.__carDatasetId
+    const featureLayerKey =
+      properties.__carLayerKey ||
+      getCarFeatureLayerKey(datasetId, featureId) ||
+      layerKey
+
+    if (!featureId || !datasetId) return
+    const bounds = layer.getBounds?.()
+    if (!bounds?.contains(latlng)) return
+    if (!pointInCarReferenceGeometry(latlng, feature.geometry)) return
+
+    const area = calculateGeometryAreaHectares(feature.geometry)
+
+    candidates.push({
+      area,
+      datasetId,
+      feature,
+      featureId,
+      layer,
+      layerKey: featureLayerKey,
+    })
+  })
+
+  return candidates.sort((left, right) => {
+    const leftArea = typeof left.area === 'number' ? left.area : Number.POSITIVE_INFINITY
+    const rightArea = typeof right.area === 'number' ? right.area : Number.POSITIVE_INFINITY
+
+    if (leftArea !== rightArea) {
+      return leftArea - rightArea
+    }
+
+    return getCarFeatureDisplayName(left.feature).localeCompare(
+      getCarFeatureDisplayName(right.feature),
+      'pt-BR'
+    )
+  })
+}
+
+function buildCarSelectionPopupContent(candidates, selectedLayerKey, onSelectCandidate) {
+  const container = document.createElement('div')
+  container.className = 'car-selector-popup'
+
+  L.DomEvent.disableClickPropagation(container)
+  L.DomEvent.disableScrollPropagation(container)
+
+  const header = document.createElement('div')
+  header.className = 'car-selector-popup__header'
+
+  const title = document.createElement('div')
+  title.className = 'car-selector-popup__title'
+  title.textContent = `${candidates.length} KMLs neste ponto`
+
+  const subtitle = document.createElement('div')
+  subtitle.className = 'car-selector-popup__subtitle'
+  subtitle.textContent = 'Escolha qual poligono deseja ativar.'
+
+  header.append(title, subtitle)
+  container.append(header)
+
+  const list = document.createElement('div')
+  list.className = 'car-selector-popup__list'
+
+  candidates.forEach((candidate, index) => {
+    const button = document.createElement('button')
+    const isSelected = candidate.layerKey && candidate.layerKey === selectedLayerKey
+
+    button.type = 'button'
+    button.className = `car-selector-popup__option${isSelected ? ' is-selected' : ''}`
+    button.setAttribute('aria-pressed', isSelected ? 'true' : 'false')
+
+    const indexNode = document.createElement('span')
+    indexNode.className = 'car-selector-popup__index'
+    indexNode.textContent = `KML ${index + 1}`
+
+    const body = document.createElement('span')
+    body.className = 'car-selector-popup__body'
+
+    const name = document.createElement('span')
+    name.className = 'car-selector-popup__name'
+    name.textContent = getCarFeatureDisplayName(candidate.feature, index)
+
+    const meta = document.createElement('span')
+    meta.className = 'car-selector-popup__meta'
+    meta.textContent = buildCarFeatureSelectionMeta(candidate.feature, candidate.area) || 'Sem metadados'
+
+    const state = document.createElement('span')
+    state.className = 'car-selector-popup__state'
+    state.textContent = isSelected ? 'Selecionado' : 'Selecionar'
+
+    body.append(name, meta)
+    button.append(indexNode, body, state)
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      onSelectCandidate(candidate, { openPopup: true })
+    })
+
+    list.append(button)
+  })
+
+  container.append(list)
+  return container
 }
 
 function getCarReferenceDatasetStyle(feature) {
@@ -758,19 +1147,59 @@ function getCarReferenceDatasetStyle(feature) {
   }
 }
 
-function carReferenceStyle(feature, overlapIdSet, selectedLayerKey, matchedDatasetId = null) {
+function carReferenceStyle(feature, overlapIdSet, selectedLayerKey, matchedDatasetId = null, overlapLayerKeySet = new Set()) {
   const properties = feature?.properties || {}
   const featureId = properties.id
+  const containment = properties.kmlContainment || {}
+  const isInsideAnotherKml = Boolean(containment.inside?.length)
+  const containsAnotherKml = Boolean(containment.contains?.length)
   const featureLayerKey =
     properties.__carLayerKey ||
     getCarFeatureLayerKey(properties.__carDatasetId, featureId)
   const datasetStyle = getCarReferenceDatasetStyle(feature)
+  const isSpatialValidationMatch =
+    (featureLayerKey && overlapLayerKeySet.has(featureLayerKey)) ||
+    (
+      overlapIdSet.has(featureId) &&
+      (!matchedDatasetId || properties.__carDatasetId === matchedDatasetId)
+    )
 
   if (selectedLayerKey && featureLayerKey === selectedLayerKey) {
-    return CAR_REFERENCE_SELECTED_STYLE
+    return isInsideAnotherKml
+      ? {
+          ...CAR_REFERENCE_SELECTED_STYLE,
+          color: CAR_REFERENCE_CONTAINED_STYLE.color,
+          fillColor: CAR_REFERENCE_CONTAINED_STYLE.fillColor,
+          dashArray: CAR_REFERENCE_CONTAINED_STYLE.dashArray,
+        }
+      : CAR_REFERENCE_SELECTED_STYLE
+  }
+
+  if (isSpatialValidationMatch) {
+    return CAR_REFERENCE_MATCHED_STYLE
   }
 
   if (selectedLayerKey) {
+    if (isInsideAnotherKml) {
+      return {
+        ...CAR_REFERENCE_CONTAINED_STYLE,
+        fillOpacity: 0.2,
+        opacity: 0.9,
+      }
+    }
+
+    if (containsAnotherKml) {
+      return {
+        ...CAR_REFERENCE_DIMMED_STYLE,
+        color: datasetStyle.color,
+        fillColor: datasetStyle.fillColor,
+        fillOpacity: 0.04,
+        dashArray: CAR_REFERENCE_CONTAINER_STYLE.dashArray,
+        dashOffset: datasetStyle.dashOffset,
+        weight: 2.2,
+      }
+    }
+
     return {
       ...CAR_REFERENCE_DIMMED_STYLE,
       color: datasetStyle.color,
@@ -780,35 +1209,53 @@ function carReferenceStyle(feature, overlapIdSet, selectedLayerKey, matchedDatas
     }
   }
 
-  if (
-    overlapIdSet.has(featureId) &&
-    (!matchedDatasetId || properties.__carDatasetId === matchedDatasetId)
-  ) {
-    return CAR_REFERENCE_MATCHED_STYLE
+  if (isInsideAnotherKml) {
+    return CAR_REFERENCE_CONTAINED_STYLE
+  }
+
+  if (containsAnotherKml) {
+    return {
+      ...datasetStyle,
+      ...CAR_REFERENCE_CONTAINER_STYLE,
+    }
+  }
+
+  if (matchedDatasetId && properties.__carDatasetId === matchedDatasetId) {
+    return {
+      ...datasetStyle,
+      ...CAR_REFERENCE_ACTIVE_DATASET_STYLE,
+    }
   }
 
   return datasetStyle
 }
 
 function buildCarReferenceMapGeojson(datasets = []) {
+  const features = datasets.flatMap((dataset, datasetIndex) => (
+    dedupeCarReferenceFeatures(dataset.geojson?.features || []).map((feature) => {
+      const featureId = feature.properties?.id
+
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          __carDatasetId: dataset.datasetId,
+          __carDatasetName: dataset.metadata?.fileName || feature.properties?.origem_arquivo || 'Base CAR/KML',
+          __carDatasetIndex: datasetIndex,
+          __carLayerKey: getCarFeatureLayerKey(dataset.datasetId, featureId),
+        },
+      }
+    })
+  ))
+
   return {
     type: 'FeatureCollection',
-    features: datasets.flatMap((dataset, datasetIndex) => (
-      dedupeCarReferenceFeatures(dataset.geojson?.features || []).map((feature) => {
-        const featureId = feature.properties?.id
+    features: features.sort((left, right) => {
+      const leftInside = left.properties?.kmlContainment?.inside?.length ? 1 : 0
+      const rightInside = right.properties?.kmlContainment?.inside?.length ? 1 : 0
 
-        return {
-          ...feature,
-          properties: {
-            ...feature.properties,
-            __carDatasetId: dataset.datasetId,
-            __carDatasetName: dataset.metadata?.fileName || feature.properties?.origem_arquivo || 'Base CAR/KML',
-            __carDatasetIndex: datasetIndex,
-            __carLayerKey: getCarFeatureLayerKey(dataset.datasetId, featureId),
-          },
-        }
-      })
-    )),
+      return leftInside - rightInside
+    }),
   }
 }
 
@@ -909,6 +1356,9 @@ function GeoJSONLayer({
         area: feature.properties.area,
         carOverlapStatus: feature.properties.carOverlapValidation?.status || null,
         carOverlapCount: feature.properties.carOverlapValidation?.overlapCount || 0,
+        carInsideCount: feature.properties.carOverlapValidation?.insideCount || 0,
+        carPartialOverlapCount: feature.properties.carOverlapValidation?.partialOverlapCount || 0,
+        carOverlapKeys: feature.properties.carOverlapValidation?.overlaps?.map((overlap) => overlap.layerKey || overlap.id).join('|') || '',
         coordinates: feature.geometry?.coordinates?.[0] || [],
       })) || []
     )
@@ -929,6 +1379,15 @@ function GeoJSONLayer({
         const featureId = feature.properties.id
 
         leafletLayer.bindPopup(popupMarkup(feature), PERSISTENT_POPUP_OPTIONS)
+        const relationTooltip = glebaReferenceTooltipMarkup(feature)
+        if (relationTooltip) {
+          leafletLayer.bindTooltip(relationTooltip, {
+            permanent: true,
+            direction: 'center',
+            className: 'gleba-relation-tooltip',
+            opacity: 1,
+          })
+        }
 
         leafletLayer.on({
           mouseover(event) {
@@ -1036,6 +1495,7 @@ function CarReferenceLayer({
   carGeojson,
   carDatasetKey = null,
   selectedOverlapIds = [],
+  selectedOverlapLayerKeys = [],
   selectedFeatureId = null,
   selectedDatasetId = null,
   viewportRequest,
@@ -1044,33 +1504,81 @@ function CarReferenceLayer({
   const leafMap = useMap()
   const featureGroupRef = useRef(null)
   const featureLayersRef = useRef(new Map())
+  const selectorPopupRef = useRef(null)
   const lastDatasetKeyRef = useRef(null)
   const lastViewportRequestRef = useRef(null)
   const selectedLayerKeyRef = useRef(getCarFeatureLayerKey(selectedDatasetId, selectedFeatureId))
   const selectedDatasetIdRef = useRef(selectedDatasetId)
   const overlapIdSetRef = useRef(new Set())
+  const overlapLayerKeySetRef = useRef(new Set())
   const overlapIdSet = useMemo(() => new Set(selectedOverlapIds), [selectedOverlapIds])
+  const overlapLayerKeySet = useMemo(() => new Set(selectedOverlapLayerKeys), [selectedOverlapLayerKeys])
   const selectedLayerKey = useMemo(
     () => getCarFeatureLayerKey(selectedDatasetId, selectedFeatureId),
     [selectedDatasetId, selectedFeatureId]
   )
 
+  const closeSelectorPopup = useCallback(() => {
+    if (!selectorPopupRef.current) return
+
+    selectorPopupRef.current.remove()
+    selectorPopupRef.current = null
+  }, [])
+
+  const selectCarCandidate = useCallback((candidate, options = {}) => {
+    if (!candidate?.datasetId || !candidate?.featureId) return
+
+    closeSelectorPopup()
+    onSelectFeature?.(candidate.datasetId, candidate.featureId)
+
+    if (candidate.layer && options.openPopup) {
+      candidate.layer.openPopup?.()
+    }
+  }, [closeSelectorPopup, onSelectFeature])
+
+  const openCarCandidateSelector = useCallback((latlng, candidates) => {
+    if (!latlng || candidates.length < 2) return
+
+    closeSelectorPopup()
+
+    const popup = L.popup(CAR_SELECTION_POPUP_OPTIONS)
+      .setLatLng(latlng)
+      .setContent(
+        buildCarSelectionPopupContent(
+          candidates,
+          selectedLayerKeyRef.current,
+          selectCarCandidate
+        )
+      )
+
+    popup.on('remove', () => {
+      if (selectorPopupRef.current === popup) {
+        selectorPopupRef.current = null
+      }
+    })
+
+    selectorPopupRef.current = popup
+    popup.openOn(leafMap)
+  }, [closeSelectorPopup, leafMap, selectCarCandidate])
+
   useEffect(() => {
     selectedLayerKeyRef.current = selectedLayerKey
     selectedDatasetIdRef.current = selectedDatasetId
     overlapIdSetRef.current = overlapIdSet
-  }, [overlapIdSet, selectedDatasetId, selectedLayerKey])
+    overlapLayerKeySetRef.current = overlapLayerKeySet
+  }, [overlapIdSet, overlapLayerKeySet, selectedDatasetId, selectedLayerKey])
 
   useEffect(() => {
     const featureGroup = L.featureGroup().addTo(leafMap)
     featureGroupRef.current = featureGroup
 
     return () => {
+      closeSelectorPopup()
       featureGroup.remove()
       featureGroupRef.current = null
       featureLayersRef.current.clear()
     }
-  }, [leafMap])
+  }, [closeSelectorPopup, leafMap])
 
   useEffect(() => {
     if (!featureGroupRef.current) return
@@ -1103,7 +1611,8 @@ function CarReferenceLayer({
         feature,
         overlapIdSetRef.current,
         selectedLayerKeyRef.current,
-        selectedDatasetIdRef.current
+        selectedDatasetIdRef.current,
+        overlapLayerKeySetRef.current
       ),
       onEachFeature: (feature, layer) => {
         const properties = feature.properties || {}
@@ -1113,28 +1622,32 @@ function CarReferenceLayer({
           properties.__carLayerKey ||
           getCarFeatureLayerKey(datasetId, featureId)
 
-        layer.bindPopup(carReferencePopupMarkup(feature), PERSISTENT_POPUP_OPTIONS)
+        layer.bindPopup(carReferencePopupMarkup(feature), CAR_REFERENCE_POPUP_OPTIONS)
 
         layer.on({
           mouseover(event) {
             const activeSelectedLayerKey = selectedLayerKeyRef.current
             const isSelected = featureLayerKey && featureLayerKey === activeSelectedLayerKey
             const isMatchedFeature =
-              overlapIdSetRef.current.has(featureId) &&
-              (!selectedDatasetIdRef.current || datasetId === selectedDatasetIdRef.current)
+              overlapLayerKeySetRef.current.has(featureLayerKey) ||
+              (
+                overlapIdSetRef.current.has(featureId) &&
+                (!selectedDatasetIdRef.current || datasetId === selectedDatasetIdRef.current)
+              )
             const baseStyle = carReferenceStyle(
               feature,
               overlapIdSetRef.current,
               activeSelectedLayerKey,
-              selectedDatasetIdRef.current
+              selectedDatasetIdRef.current,
+              overlapLayerKeySetRef.current
             )
 
             event.target.setStyle(
               isSelected
                 ? {
                     ...baseStyle,
-                    fillOpacity: 0.34,
-                    weight: 5.8,
+                    fillOpacity: 0.28,
+                    weight: baseStyle.weight,
                   }
                 : {
                     ...baseStyle,
@@ -1143,12 +1656,6 @@ function CarReferenceLayer({
                   }
             )
 
-            if (!activeSelectedLayerKey || isSelected) {
-              event.target.bringToFront()
-              return
-            }
-
-            featureLayersRef.current.get(activeSelectedLayerKey)?.bringToFront()
           },
           mouseout(event) {
             const activeSelectedLayerKey = selectedLayerKeyRef.current
@@ -1156,13 +1663,35 @@ function CarReferenceLayer({
               feature,
               overlapIdSetRef.current,
               activeSelectedLayerKey,
-              selectedDatasetIdRef.current
+              selectedDatasetIdRef.current,
+              overlapLayerKeySetRef.current
             ))
-            featureLayersRef.current.get(activeSelectedLayerKey)?.bringToFront()
           },
-          click() {
-            onSelectFeature?.(datasetId, featureId)
-            layer.openPopup()
+          click(event) {
+            if (event.originalEvent) {
+              L.DomEvent.stop(event.originalEvent)
+            }
+
+            const candidates = collectCarReferenceCandidatesAtLatLng(
+              event.latlng,
+              featureLayersRef.current
+            )
+            const fallbackCandidate = {
+              area: calculateGeometryAreaHectares(feature.geometry),
+              datasetId,
+              feature,
+              featureId,
+              layer,
+              layerKey: featureLayerKey,
+            }
+            const resolvedCandidates = candidates.length ? candidates : [fallbackCandidate]
+
+            if (resolvedCandidates.length > 1) {
+              openCarCandidateSelector(event.latlng, resolvedCandidates)
+              return
+            }
+
+            selectCarCandidate(resolvedCandidates[0], { openPopup: true })
           },
         })
 
@@ -1172,7 +1701,7 @@ function CarReferenceLayer({
         }
       },
     })
-  }, [carDatasetKey, carGeojson, leafMap, onSelectFeature])
+  }, [carDatasetKey, carGeojson, leafMap, openCarCandidateSelector, selectCarCandidate])
 
   useEffect(() => {
     if (!featureGroupRef.current) return
@@ -1181,13 +1710,10 @@ function CarReferenceLayer({
       const featureId = layer.feature?.properties?.id
       if (!featureId || typeof layer.setStyle !== 'function') return
 
-      layer.setStyle(carReferenceStyle(layer.feature, overlapIdSet, selectedLayerKey, selectedDatasetId))
+      layer.setStyle(carReferenceStyle(layer.feature, overlapIdSet, selectedLayerKey, selectedDatasetId, overlapLayerKeySet))
     })
 
-    if (selectedLayerKey) {
-      featureLayersRef.current.get(selectedLayerKey)?.bringToFront()
-    }
-  }, [overlapIdSet, selectedDatasetId, selectedLayerKey])
+  }, [overlapIdSet, overlapLayerKeySet, selectedDatasetId, selectedLayerKey])
 
   useEffect(() => {
     const requestKey = viewportRequest?.requestKey || viewportRequest?.datasetKey
@@ -1206,7 +1732,6 @@ function CarReferenceLayer({
       const bounds = layer?.getBounds?.()
 
       if (bounds?.isValid()) {
-        layer.bringToFront()
         animateToBounds(leafMap, bounds, { maxZoom: 18, duration: 1.45, padding: [72, 72] })
       }
 
@@ -2032,6 +2557,12 @@ export default function MapView({
     () => selectedGleba?.properties?.carOverlapValidation?.overlaps?.map((overlap) => overlap.id).filter(Boolean) || [],
     [selectedGleba]
   )
+  const selectedCarOverlapLayerKeys = useMemo(
+    () => selectedGleba?.properties?.carOverlapValidation?.overlaps
+      ?.map((overlap) => overlap.layerKey || getCarFeatureLayerKey(overlap.datasetId, overlap.id))
+      .filter(Boolean) || [],
+    [selectedGleba]
+  )
   const carReferenceMapGeojson = useMemo(
     () => buildCarReferenceMapGeojson(carReferenceDatasets),
     [carReferenceDatasets]
@@ -2152,6 +2683,7 @@ export default function MapView({
           carGeojson={carReferenceMapGeojson}
           carDatasetKey={carReferenceMapKey}
           selectedOverlapIds={selectedCarOverlapIds}
+          selectedOverlapLayerKeys={selectedCarOverlapLayerKeys}
           selectedFeatureId={selectedCarReferenceFeatureId}
           selectedDatasetId={activeCarReferenceDatasetId}
           viewportRequest={viewportRequest}
