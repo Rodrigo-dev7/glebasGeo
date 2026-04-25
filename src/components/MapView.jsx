@@ -163,9 +163,9 @@ const CAR_REFERENCE_CONTAINER_STYLE = {
 const CAR_REFERENCE_DIMMED_STYLE = {
   color: '#8b5cf6',
   fillColor: '#a855f7',
-  fillOpacity: 0.025,
-  opacity: 0.34,
-  weight: 1.4,
+  fillOpacity: 0.16,
+  opacity: 0.9,
+  weight: 2.8,
   dashArray: '8 8',
 }
 
@@ -798,7 +798,6 @@ function carReferencePopupMarkup(feature) {
     properties.numero_car_recibo ||
     properties.cod_imovel ||
     properties.codigo_imovel ||
-    properties.id ||
     '-'
   const municipalityUf = [
     properties.municipio || '-',
@@ -1193,10 +1192,10 @@ function carReferenceStyle(feature, overlapIdSet, selectedLayerKey, matchedDatas
         ...CAR_REFERENCE_DIMMED_STYLE,
         color: datasetStyle.color,
         fillColor: datasetStyle.fillColor,
-        fillOpacity: 0.04,
+        fillOpacity: 0.16,
         dashArray: CAR_REFERENCE_CONTAINER_STYLE.dashArray,
         dashOffset: datasetStyle.dashOffset,
-        weight: 2.2,
+        weight: 2.8,
       }
     }
 
@@ -1649,11 +1648,11 @@ function CarReferenceLayer({
                     fillOpacity: 0.28,
                     weight: baseStyle.weight,
                   }
-                : {
-                    ...baseStyle,
-                    fillOpacity: activeSelectedLayerKey ? 0.06 : isMatchedFeature ? 0.28 : 0.14,
-                    weight: activeSelectedLayerKey ? 2 : isMatchedFeature ? 3.5 : 2.8,
-                  }
+                  : {
+                      ...baseStyle,
+                      fillOpacity: activeSelectedLayerKey ? 0.2 : isMatchedFeature ? 0.28 : 0.14,
+                      weight: activeSelectedLayerKey ? 3.2 : isMatchedFeature ? 3.5 : 2.8,
+                    }
             )
 
           },

@@ -489,7 +489,7 @@ export default function CoordinateValidationPanel({
         className="coord-file-input"
         type="file"
         multiple
-        accept=".kml,.kmz,.shp"
+        accept=".kml,.kmz,.shp,.dbf"
         onChange={handleCarFileChange}
         disabled={isImportingCar}
       />
@@ -549,7 +549,7 @@ export default function CoordinateValidationPanel({
           {isImporting || isImportingCar ? 'Processando arquivos...' : 'Formatos suportados: Excel, GeoJSON, KML, KMZ e SHP'}
         </span>
         <span className="coord-upload-hint">
-          Importe uma ou varias glebas em `.xls`, `.xlsx`, `.geojson` ou `.json` e carregue uma ou varias bases do CAR em `.kml`, `.kmz` ou `.shp` para checar sobreposicao e visualizar os imoveis no mapa.
+          Importe uma ou varias glebas em `.xls`, `.xlsx`, `.geojson` ou `.json` e carregue uma ou varias bases do CAR em `.kml`, `.kmz` ou `.shp`; selecione o `.dbf` junto com o `.shp` para importar atributos como o numero do CAR.
         </span>
       </div>
 

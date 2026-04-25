@@ -81,8 +81,47 @@ function normalizeFileList(input) {
   return [input].filter(Boolean)
 }
 
-async function buildCarReferenceDatasetFromFile(file) {
-  const parsedDataset = await parseCarReferenceFile(file)
+function getFileExtension(file) {
+  const fileName = file?.name || ''
+  const extensionStart = fileName.lastIndexOf('.')
+
+  return extensionStart >= 0 ? fileName.slice(extensionStart + 1).toLowerCase() : ''
+}
+
+function getFileBaseName(file) {
+  return String(file?.name || '')
+    .replace(/\.[^.]+$/, '')
+    .toLowerCase()
+}
+
+function buildCarReferenceImportItems(files = []) {
+  const dbfFilesByBaseName = new Map()
+
+  files.forEach((file) => {
+    if (getFileExtension(file) === 'dbf') {
+      dbfFilesByBaseName.set(getFileBaseName(file), file)
+    }
+  })
+
+  return files
+    .filter((file) => getFileExtension(file) !== 'dbf')
+    .map((file) => {
+      if (getFileExtension(file) !== 'shp') {
+        return { file, options: {}, fileName: file.name }
+      }
+
+      const dbfFile = dbfFilesByBaseName.get(getFileBaseName(file)) || null
+
+      return {
+        file,
+        options: { dbfFile },
+        fileName: dbfFile ? `${file.name} + ${dbfFile.name}` : file.name,
+      }
+    })
+}
+
+async function buildCarReferenceDatasetFromImportItem(importItem) {
+  const parsedDataset = await parseCarReferenceFile(importItem.file, importItem.options)
 
   return normalizeCarReferenceDataset({
     ...parsedDataset,
@@ -330,18 +369,24 @@ export function useGlebas() {
     setCarImportError('')
 
     try {
+      const importItems = buildCarReferenceImportItems(files)
+
+      if (!importItems.length) {
+        throw new Error('Selecione ao menos um arquivo KML, KMZ ou SHP. O DBF deve ser importado junto com o SHP correspondente.')
+      }
+
       const importResults = await Promise.all(
-        files.map(async (file) => {
+        importItems.map(async (importItem) => {
           try {
             return {
-              dataset: await buildCarReferenceDatasetFromFile(file),
-              fileName: file.name,
+              dataset: await buildCarReferenceDatasetFromImportItem(importItem),
+              fileName: importItem.fileName,
               error: null,
             }
           } catch (error) {
             return {
               dataset: null,
-              fileName: file.name || 'Arquivo CAR',
+              fileName: importItem.fileName || 'Arquivo CAR',
               error,
             }
           }

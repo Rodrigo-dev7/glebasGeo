@@ -123,6 +123,84 @@ function parseNumericValue(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function createDbfTextDecoder() {
+  try {
+    return new TextDecoder('windows-1252', { fatal: false })
+  } catch {
+    return new TextDecoder('utf-8', { fatal: false })
+  }
+}
+
+function decodeDbfText(bytes) {
+  return createDbfTextDecoder().decode(bytes).replace(/\0/g, '').trim()
+}
+
+function parseDbfFieldValue(rawValue, field) {
+  const text = decodeDbfText(rawValue)
+
+  if (!text) return null
+
+  if (field.type === 'L') {
+    const normalized = text.toLowerCase()
+    if (['t', 'y', 's', '1'].includes(normalized)) return true
+    if (['f', 'n', '0'].includes(normalized)) return false
+  }
+
+  if (field.type === 'D' && /^\d{8}$/.test(text)) {
+    return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
+  }
+
+  return text
+}
+
+async function parseDbfRecords(file) {
+  if (!file) return []
+
+  const arrayBuffer = await file.arrayBuffer()
+  const view = new DataView(arrayBuffer)
+  const bytes = new Uint8Array(arrayBuffer)
+
+  if (view.byteLength < 32) {
+    throw new Error('O arquivo DBF informado nao possui cabecalho valido.')
+  }
+
+  const recordCount = view.getUint32(4, true)
+  const headerLength = view.getUint16(8, true)
+  const recordLength = view.getUint16(10, true)
+  const fields = []
+
+  for (let offset = 32; offset + 32 <= headerLength && bytes[offset] !== 0x0d; offset += 32) {
+    const name = decodeDbfText(bytes.slice(offset, offset + 11))
+    const type = String.fromCharCode(bytes[offset + 11] || 0)
+    const length = bytes[offset + 16]
+
+    if (name && length) {
+      fields.push({ name, type, length })
+    }
+  }
+
+  const records = []
+
+  for (let index = 0; index < recordCount; index += 1) {
+    const recordOffset = headerLength + index * recordLength
+    if (recordOffset + recordLength > view.byteLength) break
+    if (bytes[recordOffset] === 0x2a) continue
+
+    let fieldOffset = recordOffset + 1
+    const record = {}
+
+    fields.forEach((field) => {
+      const rawValue = bytes.slice(fieldOffset, fieldOffset + field.length)
+      record[field.name] = parseDbfFieldValue(rawValue, field)
+      fieldOffset += field.length
+    })
+
+    records.push(record)
+  }
+
+  return records
+}
+
 function parseCoordinateTuple(rawCoordinate) {
   const [lon, lat] = String(rawCoordinate).trim().split(',').map(Number)
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
@@ -434,25 +512,36 @@ function parseShpFeatures(arrayBuffer) {
   return features
 }
 
-async function buildShpFeature({ geometry, index, recordNumber, fileName }) {
+async function buildShpFeature({ geometry, index, recordNumber, fileName, attributes = null }) {
   const baseName = getBaseFileName(fileName)
   const outerRings = geometryOuterRings(geometry)
   const flattenedCoordinates = flattenPolygons(outerRings)
   const boundaryInfo = await lookupMunicipalityAndState(flattenedCoordinates)
   const areaHa = calculateMultiPolygonAreaHectares(outerRings)
+  const carNumber = getPropertyByAliases(attributes, CAR_NUMBER_ALIASES)
+  const municipio =
+    getPropertyByAliases(attributes, MUNICIPALITY_ALIASES) ||
+    boundaryInfo?.municipio ||
+    null
+  const uf =
+    getPropertyByAliases(attributes, UF_ALIASES) ||
+    boundaryInfo?.uf ||
+    null
+  const informedAreaHa = parseNumericValue(getPropertyByAliases(attributes, AREA_ALIASES))
   const suffix = recordNumber || index + 1
 
   return {
     type: 'Feature',
     properties: {
-      id: `SHP-${slugify(baseName)}-${suffix}`,
-      nome: outerRings.length > 1 || index > 0 ? `${baseName} ${suffix}` : baseName,
-      numero_car_recibo: null,
-      municipio: boundaryInfo?.municipio || null,
-      uf: boundaryInfo?.uf || null,
-      area: areaHa,
+      ...(attributes || {}),
+      id: `SHP-${slugify(carNumber || baseName)}-${suffix}`,
+      nome: carNumber || (outerRings.length > 1 || index > 0 ? `${baseName} ${suffix}` : baseName),
+      numero_car_recibo: carNumber,
+      municipio,
+      uf,
+      area: informedAreaHa ?? areaHa,
       areaCalculada: areaHa,
-      areaInformada: null,
+      areaInformada: informedAreaHa,
       descricao: null,
       origem_arquivo: fileName,
       sourceType: 'shp_car',
@@ -461,8 +550,9 @@ async function buildShpFeature({ geometry, index, recordNumber, fileName }) {
   }
 }
 
-async function parseShpFile(file) {
+async function parseShpFile(file, options = {}) {
   const shpFeatures = parseShpFeatures(await file.arrayBuffer())
+  const dbfRecords = await parseDbfRecords(options.dbfFile)
 
   if (!shpFeatures.length) {
     throw new Error('Nao encontrei poligonos validos no arquivo SHP informado.')
@@ -474,6 +564,7 @@ async function parseShpFile(file) {
         ...feature,
         index,
         fileName: file.name,
+        attributes: dbfRecords[index] || dbfRecords[(feature.recordNumber || 0) - 1] || null,
       })
     )
   )
@@ -488,6 +579,7 @@ async function parseShpFile(file) {
       sourceType: 'shp_car',
       rowCount: features.length,
       glebaCount: features.length,
+      dbfFileName: options.dbfFile?.name || null,
       importedAt: new Date().toISOString(),
     },
   })
@@ -611,7 +703,7 @@ async function extractKmlTextFromKmz(file) {
   return decodeZipText(inflatedData)
 }
 
-export async function parseCarReferenceFile(file) {
+export async function parseCarReferenceFile(file, options = {}) {
   const lowerName = file?.name?.toLowerCase() || ''
 
   if (!file) {
@@ -636,8 +728,8 @@ export async function parseCarReferenceFile(file) {
   }
 
   if (lowerName.endsWith('.shp')) {
-    return parseShpFile(file)
+    return parseShpFile(file, options)
   }
 
-  throw new Error('Formato nao suportado para a base do CAR. Use KML (.kml), KMZ (.kmz) ou SHP (.shp).')
+  throw new Error('Formato nao suportado para a base do CAR. Use KML (.kml), KMZ (.kmz) ou SHP (.shp), com DBF opcional para atributos.')
 }
