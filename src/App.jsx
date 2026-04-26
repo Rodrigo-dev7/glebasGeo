@@ -32,6 +32,7 @@ export default function App() {
     isImporting,
     importDataset,
     resetImportedDatasetCoordinates,
+    removeGleba,
     clearImportedDataset,
     clearApplicationData,
     carReferenceDataset,
@@ -113,8 +114,8 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <div className={`app-body${!isSidebarVisible ? ' app-body--sidebar-collapsed' : ''}`}>
+    <div className="app bg-geo-bg text-slate-100">
+      <div className={`app-body flex min-h-0 overflow-hidden${!isSidebarVisible ? ' app-body--sidebar-collapsed' : ''}`}>
         {isMobileSidebar && isMobileSidebarOpen && (
           <button
             type="button"
@@ -135,6 +136,7 @@ export default function App() {
           importError={importError}
           isImporting={isImporting}
           importDataset={importDataset}
+          removeGleba={removeGleba}
           clearImportedDataset={clearImportedDataset}
           clearApplicationData={handleClearApplicationData}
           carReferenceDataset={carReferenceDataset}
@@ -164,7 +166,7 @@ export default function App() {
           isMobileOpen={isMobileSidebarOpen}
         />
 
-        <main className="map-area">
+        <main className="map-area min-w-0 flex-1 overflow-hidden">
           <FilterBar
             activeFilter={activeFilter}
             setActiveFilter={setActiveFilter}

@@ -4,6 +4,24 @@
    ──────────────────────────────────────────────────────────────────────────── */
 
 /* ── Variables ────────────────────────────────────────────────────────────── */
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", system-ui, sans-serif;
+  --font-display: "Sora", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Courier New", monospace;
+  --color-geo-bg: #060d18;
+  --color-geo-surface: #0b1628;
+  --color-geo-panel: #0f1f38;
+  --color-geo-accent: #38bdf8;
+  --color-geo-green: #22c55e;
+  --color-geo-red: #ef4444;
+  --color-geo-amber: #f59e0b;
+  --shadow-geo-panel: 0 18px 45px rgba(0, 0, 0, 0.28);
+  --shadow-geo-control: 0 12px 30px rgba(0, 0, 0, 0.22);
+}
+
 :root {
   /* Background layers */
   --bg:          #060d18;
@@ -2515,6 +2533,12 @@ body.is-resizing-sidebar {
   height: 100%;
   width: 100%;
   background: #060d18;
+  transition: opacity 0.22s ease;
+}
+
+.map-wrapper--globe .leaflet-container {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .basemap-control {
@@ -2580,9 +2604,9 @@ body.is-resizing-sidebar {
 
 .basemap-control__thumb--dark {
   background:
-    linear-gradient(180deg, rgba(97, 124, 150, 0.18), transparent),
-    radial-gradient(circle at 28% 30%, rgba(103, 199, 255, 0.18), transparent 32%),
-    linear-gradient(135deg, #15263b, #0a1321);
+    linear-gradient(180deg, rgba(94, 111, 104, 0.18), transparent),
+    radial-gradient(circle at 30% 32%, rgba(34, 197, 94, 0.24), transparent 32%),
+    linear-gradient(135deg, #202321, #070908 62%, #020303);
 }
 
 .basemap-control__thumb--satellite {
@@ -2594,6 +2618,178 @@ body.is-resizing-sidebar {
 
 .basemap-control__label {
   line-height: 1;
+}
+
+.globe-view {
+  position: absolute;
+  inset: 0;
+  z-index: 720;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(56, 189, 248, 0.12), transparent 34%),
+    linear-gradient(180deg, #020712, #030914 48%, #02050b);
+}
+
+.globe-view--map {
+  background:
+    radial-gradient(circle at 50% 44%, rgba(94, 99, 96, 0.2), transparent 34%),
+    radial-gradient(circle at 50% 52%, rgba(255, 255, 255, 0.035), transparent 48%),
+    linear-gradient(180deg, #060809, #040606 48%, #020303);
+}
+
+.globe-view--map::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(128, 145, 138, 0.026) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(128, 145, 138, 0.022) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.78), transparent 68%);
+  opacity: 0.16;
+  animation: globe-map-grid-drift 18s linear infinite;
+}
+
+.globe-view--map::after {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 48% 45%, rgba(54, 159, 96, 0.11), transparent 20%),
+    radial-gradient(circle at 56% 54%, rgba(93, 116, 105, 0.09), transparent 28%),
+    radial-gradient(circle at 36% 38%, rgba(54, 159, 96, 0.055), transparent 32%);
+  filter: blur(18px);
+  opacity: 0.58;
+  animation: globe-map-nebula 10s ease-in-out infinite alternate;
+}
+
+.globe-view--intro {
+  z-index: 940;
+  cursor: default;
+  animation: globe-intro-fade-in 0.7s ease both;
+}
+
+.globe-view canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.globe-view--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d8ecff;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.globe-view__hud {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: min(340px, calc(100% - 36px));
+  padding: 12px 14px;
+  border: 1px solid rgba(103, 199, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(5, 12, 24, 0.72);
+  color: #d8ecff;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+  pointer-events: none;
+}
+
+.globe-view__hud--legacy {
+  display: none;
+}
+
+.globe-view--map .globe-view__hud {
+  border-color: rgba(104, 121, 113, 0.2);
+  background: rgba(5, 7, 7, 0.72);
+}
+
+.globe-view__hud span {
+  color: #7dd3fc;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.globe-view--map .globe-view__hud span {
+  color: #7fb596;
+}
+
+.globe-view__hud strong {
+  color: #f3f8ff;
+  font-family: var(--font-display);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.globe-view__skip {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 3;
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 1px solid rgba(103, 199, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(5, 12, 24, 0.72);
+  color: #d8ecff;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.globe-view__skip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(103, 199, 255, 0.34);
+  background: rgba(11, 22, 40, 0.88);
+}
+
+@keyframes globe-intro-fade-in {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes globe-map-grid-drift {
+  from {
+    background-position: 0 0, 0 0;
+  }
+  to {
+    background-position: 72px 36px, 36px 72px;
+  }
+}
+
+@keyframes globe-map-nebula {
+  from {
+    opacity: 0.38;
+    transform: scale(0.98) translate3d(-1%, 0, 0);
+  }
+  to {
+    opacity: 0.68;
+    transform: scale(1.03) translate3d(1%, -1%, 0);
+  }
 }
 
 /* ── Leaflet Zoom Control ─────────────────────────────────────────────────── */
@@ -4623,5 +4819,530 @@ body {
 
   .sidebar-mobile-trigger {
     top: calc(var(--filterbar-h) + 14px);
+  }
+}
+
+/* Tailwind-powered interface polish */
+.app {
+  @apply font-sans text-slate-100 antialiased;
+}
+
+button,
+input {
+  @apply transition-all duration-200 ease-out;
+}
+
+button:focus-visible,
+input:focus-visible,
+[role='button']:focus-visible {
+  @apply outline outline-2 outline-offset-2 outline-sky-300;
+}
+
+.sidebar,
+.filter-bar,
+.coord-panel,
+.sidebar-surface,
+.gleba-accordion-card,
+.gleba-panel,
+.coord-car-library,
+.coord-car-card,
+.coord-result,
+.map-legend,
+.basemap-control,
+.gleba-modal {
+  @apply border border-white/10 shadow-2xl backdrop-blur-md;
+}
+
+.sidebar {
+  background:
+    linear-gradient(180deg, rgba(8, 18, 33, 0.98), rgba(6, 13, 24, 0.99)),
+    radial-gradient(circle at 18% 0%, rgba(56, 189, 248, 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(15, 31, 56, 0.62), rgba(6, 13, 24, 0));
+}
+
+.sidebar::before {
+  opacity: 0.24;
+}
+
+.sidebar-header::before,
+.sidebar-surface,
+.coord-panel,
+.stat-card,
+.gleba-accordion-card,
+.coord-car-card,
+.panel-section,
+.coord-upload,
+.coord-dataset-meta,
+.coord-result,
+.coord-feedback,
+.map-legend,
+.basemap-control {
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+.sidebar-logo-icon,
+.hint-icon,
+.coord-action-btn__icon,
+.basemap-control__thumb,
+.legend-toggle,
+.sidebar-collapse-btn,
+.sidebar-expand-fab,
+.sidebar-mobile-trigger {
+  @apply shadow-lg;
+}
+
+.sidebar-logo-name,
+.coord-panel-title,
+.filter-summary,
+.panel-nome,
+.gleba-accordion-name,
+.stats-title {
+  @apply tracking-normal;
+  text-rendering: geometricPrecision;
+}
+
+.stat-card,
+.coord-action-btn,
+.coord-submit-btn,
+.filter-pill,
+.filter-point-mode__button,
+.basemap-control__button,
+.coord-inline-clear,
+.gleba-accordion-card,
+.coord-car-feature-button,
+.coord-car-card,
+.panel-close,
+.legend-toggle {
+  @apply will-change-transform;
+}
+
+.stat-card:hover,
+.coord-action-btn:hover:not(:disabled),
+.coord-submit-btn:hover:not(:disabled),
+.filter-pill:hover,
+.filter-point-mode__button:hover,
+.basemap-control__button:hover,
+.gleba-accordion-trigger:hover,
+.coord-car-card:hover,
+.coord-car-feature-button:hover {
+  @apply -translate-y-0.5;
+}
+
+.coord-action-btn:disabled,
+.coord-submit-btn:disabled {
+  @apply cursor-not-allowed opacity-50;
+}
+
+.coord-action-btn,
+.coord-submit-btn,
+.filter-pill,
+.filter-point-mode__button,
+.basemap-control__button,
+.coord-inline-clear,
+.coord-field input,
+.coord-car-feature-button {
+  @apply rounded-2xl font-semibold;
+}
+
+.coord-field input,
+.coord-upload,
+.coord-dataset-meta,
+.coord-result,
+.coord-feedback,
+.detail-row,
+.issue-card,
+.panel-ok,
+.coord-table-row,
+.gleba-accordion-field,
+.coord-car-feature-button,
+.car-selector-popup__option {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)),
+    rgba(8, 18, 33, 0.62);
+}
+
+.coord-field input:focus,
+.coord-car-feature-button:focus-visible,
+.filter-point-mode__button:focus-visible,
+.filter-pill:focus-visible {
+  border-color: rgba(56, 189, 248, 0.42);
+  box-shadow:
+    0 0 0 3px rgba(56, 189, 248, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.filter-bar {
+  background:
+    linear-gradient(180deg, rgba(9, 18, 32, 0.96), rgba(8, 17, 30, 0.94)),
+    radial-gradient(circle at 12% 0%, rgba(56, 189, 248, 0.12), transparent 36%);
+}
+
+.filter-pill.active,
+.filter-point-mode__button.is-active,
+.basemap-control__button.is-active,
+.coord-car-card--active,
+.coord-car-feature-button.is-selected {
+  box-shadow:
+    0 16px 34px rgba(0, 0, 0, 0.22),
+    0 0 0 1px rgba(56, 189, 248, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.map-wrapper {
+  @apply isolate;
+}
+
+.map-wrapper .leaflet-container {
+  background: #07111f;
+}
+
+.map-wrapper .leaflet-control-zoom,
+.basemap-control,
+.map-legend,
+.leaflet-control-attribution {
+  backdrop-filter: blur(16px) saturate(130%);
+}
+
+.leaflet-control-zoom a,
+.legend-toggle,
+.sidebar-collapse-btn,
+.sidebar-expand-fab,
+.sidebar-mobile-trigger {
+  @apply rounded-xl;
+}
+
+.custom-popup .leaflet-popup-content-wrapper,
+.car-selector-popup,
+.gleba-popup,
+.validation-popup {
+  @apply shadow-2xl;
+}
+
+.gleba-modal-overlay {
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.gleba-modal {
+  background:
+    linear-gradient(180deg, rgba(12, 24, 42, 0.98), rgba(6, 13, 24, 0.98)),
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.1), transparent 30%);
+}
+
+@media (max-width: 768px) {
+  .sidebar,
+  .filter-bar,
+  .coord-panel,
+  .sidebar-surface,
+  .gleba-accordion-card {
+    @apply shadow-xl;
+  }
+
+  .filter-pill,
+  .filter-point-mode__button,
+  .coord-action-btn {
+    @apply w-full;
+  }
+}
+
+/* Sidebar motion and text refinements */
+.app-body {
+  transition: background-color 0.45s ease;
+}
+
+.sidebar {
+  transform: translateX(0);
+  will-change: width, opacity, transform;
+  transition:
+    width 0.56s cubic-bezier(0.22, 1, 0.36, 1),
+    max-width 0.56s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.42s ease,
+    transform 0.56s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.42s ease,
+    box-shadow 0.42s ease;
+}
+
+.sidebar--collapsed {
+  transform: translateX(-18px);
+  visibility: hidden;
+  transition:
+    width 0.5s cubic-bezier(0.55, 0, 0.1, 1),
+    max-width 0.5s cubic-bezier(0.55, 0, 0.1, 1),
+    opacity 0.3s ease,
+    transform 0.5s cubic-bezier(0.55, 0, 0.1, 1),
+    visibility 0s linear 0.5s;
+}
+
+.sidebar-scroll {
+  transition:
+    opacity 0.34s ease,
+    transform 0.48s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.48s ease;
+}
+
+.sidebar--collapsed .sidebar-scroll {
+  opacity: 0;
+  transform: translateX(-12px);
+  filter: blur(1px);
+}
+
+.sidebar-expand-fab,
+.sidebar-mobile-trigger {
+  animation: sidebar-trigger-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sidebar-trigger-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.sidebar,
+.sidebar * {
+  min-width: 0;
+}
+
+.coord-action-btn__label,
+.coord-submit-btn,
+.coord-inline-clear,
+.filter-pill,
+.filter-point-mode__button,
+.sidebar-section-title,
+.coord-result-badge,
+.coord-result-type,
+.coord-result-query,
+.coord-car-card__badge,
+.coord-car-feature-button__state {
+  white-space: nowrap;
+}
+
+.coord-action-btn__label,
+.coord-submit-btn,
+.coord-inline-clear,
+.coord-result-badge,
+.coord-result-type,
+.coord-car-card__badge,
+.coord-car-feature-button__state {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.coord-upload-label,
+.coord-upload-hint,
+.coord-result-message,
+.hint-text,
+.issue-msg {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+.coord-dataset-meta {
+  min-width: 0;
+}
+
+.coord-dataset-meta span {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coord-dataset-meta span:first-child {
+  flex: 1 1 100%;
+}
+
+.gleba-accordion-field strong,
+.coord-car-card__name,
+.coord-car-feature-button__name,
+.coord-car-feature-button__meta,
+.coord-result-item strong,
+.coord-result-item span,
+.detail-value {
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.gleba-accordion-field strong,
+.coord-car-card__name,
+.coord-car-feature-button__name,
+.coord-car-feature-button__meta,
+.coord-result-item span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.gleba-accordion-field span,
+.detail-label,
+.coord-field span {
+  white-space: nowrap;
+}
+
+/* Neutral Leaflet zoom buttons */
+.leaflet-control-zoom {
+  display: flex !important;
+  flex-direction: column;
+  gap: 8px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  overflow: visible;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.leaflet-control-zoom a,
+.leaflet-control-zoom a:first-child,
+.leaflet-control-zoom a:last-child {
+  width: 34px !important;
+  height: 34px !important;
+  line-height: 32px !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+  background: rgba(5, 11, 20, 0.74) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.24) !important;
+}
+
+.leaflet-control-zoom a:hover,
+.leaflet-control-zoom a:focus {
+  background: rgba(10, 18, 31, 0.9) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28) !important;
+}
+
+.leaflet-control-zoom a + a {
+  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebar-scroll,
+  .sidebar-expand-fab,
+  .sidebar-mobile-trigger {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* Compact map header and legend sizing */
+:root {
+  --filterbar-h: 68px;
+}
+
+.filter-bar {
+  min-height: var(--filterbar-h);
+  padding: 10px 18px 12px;
+  gap: 10px 16px;
+  align-content: center;
+}
+
+.filter-bar__intro {
+  gap: 7px;
+}
+
+.filter-summary {
+  font-size: 17px;
+  line-height: 1.15;
+}
+
+.filter-label {
+  font-size: 10px;
+}
+
+.filter-point-mode__actions {
+  gap: 8px;
+}
+
+.filter-point-mode__button,
+.filter-pill {
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 11px;
+}
+
+.filter-bar__toggle {
+  min-height: 30px;
+  padding: 6px 10px;
+}
+
+.sidebar-expand-fab {
+  top: calc(var(--filterbar-h) + 86px);
+}
+
+.map-legend {
+  min-width: 132px;
+  padding: 10px 12px !important;
+  border-radius: 14px !important;
+}
+
+.legend-head {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.legend-title {
+  font-size: 9px;
+  letter-spacing: 0.11em;
+}
+
+.legend-toggle {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+}
+
+.legend-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.legend-item {
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 10.5px;
+  line-height: 1.18;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border-width: 1px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-width: 2px;
+}
+
+.map-legend--collapsed {
+  min-width: 112px;
+  padding: 8px 10px !important;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --filterbar-h: 104px;
+  }
+
+  .filter-bar {
+    padding: 11px 12px;
+    gap: 9px;
+  }
+
+  .sidebar-mobile-trigger {
+    top: calc(var(--filterbar-h) + 24px);
   }
 }

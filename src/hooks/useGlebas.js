@@ -61,6 +61,36 @@ function createImportedDatasetViewportKey(dataset) {
   return dataset.metadata.datasetKey || `${dataset.metadata.fileName}-${dataset.metadata.importedAt}`
 }
 
+function removeFeatureFromGeojson(geojson, featureId) {
+  if (!geojson?.features?.length || !featureId) return geojson
+
+  return {
+    ...geojson,
+    features: geojson.features.filter((feature) => feature.properties?.id !== featureId),
+  }
+}
+
+function countGeojsonRows(geojson) {
+  return (geojson?.features || []).reduce(
+    (total, feature) => total + (
+      feature.properties?.coordinateStatuses?.length ||
+      feature.geometry?.coordinates?.[0]?.length ||
+      0
+    ),
+    0
+  )
+}
+
+function updateDatasetMetadataForGeojson(metadata = {}, geojson) {
+  const features = geojson?.features || []
+
+  return {
+    ...metadata,
+    rowCount: countGeojsonRows(geojson),
+    glebaCount: features.length,
+  }
+}
+
 function getSingleCarReferenceFeatureId(dataset) {
   const features = dataset?.geojson?.features || []
 
@@ -580,6 +610,56 @@ export function useGlebas() {
     })
   }, [])
 
+  const removeGleba = useCallback((featureId) => {
+    if (!featureId) return false
+    if (!importedDataset?.geojson?.features?.length) return false
+
+    const hasFeature = importedDataset.geojson.features.some(
+      (feature) => feature.properties?.id === featureId
+    )
+    if (!hasFeature) return false
+
+    const nextGeojson = removeFeatureFromGeojson(importedDataset.geojson, featureId)
+
+    setImportedDataset((currentDataset) => {
+      if (!currentDataset?.geojson?.features?.length) return currentDataset
+
+      const currentHasFeature = currentDataset.geojson.features.some(
+        (feature) => feature.properties?.id === featureId
+      )
+      if (!currentHasFeature) return currentDataset
+
+      const geojson = removeFeatureFromGeojson(currentDataset.geojson, featureId)
+      const sourceGeojson = removeFeatureFromGeojson(currentDataset.sourceGeojson, featureId)
+
+      return {
+        ...currentDataset,
+        geojson,
+        sourceGeojson,
+        metadata: updateDatasetMetadataForGeojson(currentDataset.metadata, geojson),
+      }
+    })
+
+    setMatchedFeatureIds((currentIds) => currentIds.filter((id) => id !== featureId))
+    setSelectedGleba((currentSelectedGleba) => (
+      currentSelectedGleba?.properties?.id === featureId ? null : currentSelectedGleba
+    ))
+
+    syncValidationStateForGeojson(nextGeojson)
+
+    if (!nextGeojson.features.length) {
+      setValidationResult(null)
+      setQueryPoint(null)
+      setActiveFilter('todas')
+      setMapViewportRequest({
+        type: 'home',
+        requestKey: `home-${Date.now()}`,
+      })
+    }
+
+    return true
+  }, [importedDataset, syncValidationStateForGeojson])
+
   const validateCoordinate = useCallback(({ lat, lon }) => {
     const point = { lat, lon }
     setQueryPoint(point)
@@ -721,6 +801,7 @@ export function useGlebas() {
     isImporting,
     importDataset,
     resetImportedDatasetCoordinates,
+    removeGleba,
     clearImportedDataset,
     clearApplicationData,
     carReferenceDataset: activeCarReferenceDataset,

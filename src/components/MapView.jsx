@@ -2,13 +2,15 @@
  * MapView.jsx
  * Mapa interativo com poligonos, vertices e destaque das criticas SICOR.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CircleMarker, MapContainer, Pane, Polyline, Popup, TileLayer, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import Legend from './Legend'
 import { dedupeCarReferenceFeatures } from '../services/carReferenceFeatureService'
 import { getEditableCoordinates } from '../services/featureGeometryService'
 import { calculatePolygonAreaHectares } from '../services/glebaEnrichmentService'
+
+const GlobeView = lazy(() => import('./GlobeView'))
 
 const BRAZIL_CENTER = [-14.235, -51.9253]
 const BRAZIL_ZOOM = 4
@@ -53,12 +55,28 @@ function MapInvalidateOnLayout({ revision }) {
   const map = useMap()
   useEffect(() => {
     const id = requestAnimationFrame(() => map.invalidateSize())
-    const t = setTimeout(() => map.invalidateSize(), 400)
+    const timeouts = [180, 420, 720].map((delay) =>
+      setTimeout(() => map.invalidateSize(), delay)
+    )
     return () => {
       cancelAnimationFrame(id)
-      clearTimeout(t)
+      timeouts.forEach(clearTimeout)
     }
   }, [revision, map])
+  return null
+}
+
+function MapZoomTracker({ onZoomChange }) {
+  const map = useMap()
+
+  useEffect(() => {
+    const syncZoom = () => onZoomChange?.(map.getZoom())
+
+    syncZoom()
+    map.on('zoomend', syncZoom)
+    return () => map.off('zoomend', syncZoom)
+  }, [map, onZoomChange])
+
   return null
 }
 
@@ -2527,6 +2545,19 @@ function BasemapControl({ activeBasemap, onChange }) {
   )
 }
 
+function shouldShowDetailedMapForViewport(viewportRequest) {
+  if (!viewportRequest) return false
+
+  return [
+    'dataset',
+    'feature',
+    'feature-set',
+    'point',
+    'car-reference',
+    'car-feature',
+  ].includes(viewportRequest.type)
+}
+
 export default function MapView({
   glebas,
   carReferenceDataset,
@@ -2549,9 +2580,14 @@ export default function MapView({
 }) {
   const selectedId = selectedGleba?.properties?.id
   const [draggingFeatureId, setDraggingFeatureId] = useState(null)
-  const [activeBasemap, setActiveBasemap] = useState('dark')
+  const [activeBasemap, setActiveBasemap] = useState('satellite')
   const [satelliteSourceIndex, setSatelliteSourceIndex] = useState(0)
   const [requestedVertexActivation, setRequestedVertexActivation] = useState(null)
+  const [mapZoom, setMapZoom] = useState(BRAZIL_ZOOM)
+  const [isIntroActive, setIsIntroActive] = useState(true)
+  const [isStartupGlobePinned, setIsStartupGlobePinned] = useState(true)
+  const isGlobalGlobeMode = mapZoom <= 3
+  const isGlobeVisible = isStartupGlobePinned || isIntroActive || isGlobalGlobeMode
   const selectedCarOverlapIds = useMemo(
     () => selectedGleba?.properties?.carOverlapValidation?.overlaps?.map((overlap) => overlap.id).filter(Boolean) || [],
     [selectedGleba]
@@ -2599,6 +2635,24 @@ export default function MapView({
     setDraggingFeatureId(nextState?.active ? nextState.featureId || null : null)
   }, [])
 
+  const completeIntroOnGlobe = useCallback(() => {
+    setIsIntroActive(false)
+    setIsStartupGlobePinned(true)
+  }, [])
+
+  const skipIntro = useCallback(() => {
+    completeIntroOnGlobe()
+  }, [completeIntroOnGlobe])
+
+  const finishIntro = useCallback(() => {
+    completeIntroOnGlobe()
+  }, [completeIntroOnGlobe])
+
+  const handleBasemapChange = useCallback((nextBasemap) => {
+    setIsIntroActive(false)
+    setActiveBasemap(nextBasemap)
+  }, [])
+
   useEffect(() => {
     if (selectedGleba?.properties?.id) {
       return
@@ -2611,6 +2665,21 @@ export default function MapView({
     if (activeBasemap !== 'satellite') return
     setSatelliteSourceIndex(0)
   }, [activeBasemap])
+
+  useEffect(() => {
+    if (!viewportRequest) return
+
+    if (shouldShowDetailedMapForViewport(viewportRequest)) {
+      setIsIntroActive(false)
+      setIsStartupGlobePinned(false)
+      return
+    }
+
+    if (viewportRequest.type === 'home') {
+      setIsIntroActive(false)
+      setIsStartupGlobePinned(true)
+    }
+  }, [viewportRequest])
 
   const currentBasemap = useMemo(() => {
     if (activeBasemap !== 'satellite') {
@@ -2636,7 +2705,12 @@ export default function MapView({
   }, [onSelectCarReferenceFeature])
 
   return (
-    <div className="map-wrapper">
+    <div className={`map-wrapper${isGlobeVisible ? ' map-wrapper--globe' : ''}${isIntroActive ? ' map-wrapper--intro' : ''}`}>
+      <BasemapControl
+        activeBasemap={activeBasemap}
+        onChange={handleBasemapChange}
+      />
+
       <MapContainer
         center={BRAZIL_CENTER}
         zoom={BRAZIL_ZOOM}
@@ -2646,26 +2720,24 @@ export default function MapView({
         closePopupOnClick={false}
       >
         <MapInvalidateOnLayout revision={layoutRevision} />
+        <MapZoomTracker onZoomChange={setMapZoom} />
         <Pane name="car-reference" style={{ zIndex: 360 }} />
         <Pane name="gleba-layer" style={{ zIndex: 460 }} />
         <Pane name="gleba-points" style={{ zIndex: 620 }} />
         <Pane name="selected-vertices" style={{ zIndex: 650 }} />
 
-        <BasemapControl
-          activeBasemap={activeBasemap}
-          onChange={setActiveBasemap}
-        />
-
-        <TileLayer
-          key={`${activeBasemap}-${currentBasemap.key}`}
-          attribution={currentBasemap.attribution}
-          url={currentBasemap.url}
-          subdomains={currentBasemap.subdomains}
-          maxZoom={currentBasemap.maxZoom}
-          eventHandlers={{
-            tileerror: handleTileError,
-          }}
-        />
+        {currentBasemap && (
+          <TileLayer
+            key={`${activeBasemap}-${currentBasemap.key}`}
+            attribution={currentBasemap.attribution}
+            url={currentBasemap.url}
+            subdomains={currentBasemap.subdomains}
+            maxZoom={currentBasemap.maxZoom}
+            eventHandlers={{
+              tileerror: handleTileError,
+            }}
+          />
+        )}
 
         {activeBasemap === 'satellite' && BASEMAPS.satellite.labels && (
           <TileLayer
@@ -2726,6 +2798,23 @@ export default function MapView({
         <ValidationPointMarker queryPoint={queryPoint} />
         <Legend />
       </MapContainer>
+
+      {isGlobeVisible && (
+        <Suspense fallback={<div className="globe-view globe-view--loading">Carregando visualizacao global...</div>}>
+          <GlobeView
+            glebas={glebas}
+            carGeojson={carReferenceMapGeojson}
+            visibleFeatureIds={visibleFeatureIds}
+            selectedId={selectedId}
+            selectedCarLayerKeys={selectedCarOverlapLayerKeys}
+            viewportRequest={viewportRequest}
+            variant={activeBasemap === 'dark' ? 'map' : 'satellite'}
+            introAnimation={isIntroActive}
+            onIntroComplete={finishIntro}
+            onIntroSkip={skipIntro}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }
