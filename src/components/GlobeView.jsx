@@ -30,7 +30,6 @@ const GLOBE_THEMES = {
     stars: '#d7efff',
     starOpacity: 0.72,
     hudLabel: 'Satelite global',
-    hudTitle: 'Terra imersiva com glebas e CAR/KML projetados',
   },
   map: {
     sceneBackground: '#050708',
@@ -43,7 +42,6 @@ const GLOBE_THEMES = {
     stars: '#9aa49f',
     starOpacity: 0.38,
     hudLabel: 'Mapa global',
-    hudTitle: 'Globo tecnico com glebas e camadas geoespaciais',
   },
 }
 
@@ -1046,11 +1044,6 @@ export default function GlobeView({
     >
       <div className="globe-view__hud" aria-hidden="true">
         <span>{theme.hudLabel}</span>
-        <strong>{theme.hudTitle}</strong>
-      </div>
-      <div className="globe-view__hud globe-view__hud--legacy" aria-hidden="true">
-        <span>Satélite global</span>
-        <strong>Terra imersiva com glebas e CAR/KML projetados</strong>
       </div>
       {introAnimation && (
         <button

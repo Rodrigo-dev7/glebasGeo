@@ -15,19 +15,45 @@ import { calculatePolygonAreaHectares } from './glebaEnrichmentService'
 const CAR_NUMBER_ALIASES = [
   'n_do_car',
   'n_do_recibo',
+  'n_recibo',
+  'nrecibo',
   'numero_do_car',
   'numero_car',
   'numero_recibo',
+  'numero_rec',
+  'numero_imovel',
   'num_car',
+  'numcar',
   'num_recibo',
+  'numrecibo',
   'nr_car',
+  'nrcar',
   'nr_recibo',
+  'nu_car',
+  'nucar',
+  'nu_recibo',
   'recibo',
+  'recibo_car',
   'car',
+  'cod_car',
+  'codcar',
   'cod_imovel',
+  'codimovel',
+  'cod_imove',
+  'cd_imovel',
+  'cdimovel',
   'codigo_imovel',
+  'codigoimo',
+  'codigo_car',
+  'codigo_sicar',
+  'cod_sicar',
   'id_imovel',
+  'id_car',
+  'idcar',
+  'car_id',
 ]
+const CAR_NUMBER_PATTERN = /\b[A-Z]{2}-\d{7}-[A-Z0-9]{8,}\b/i
+const CAR_NUMBER_KEY_HINTS = ['car', 'recibo', 'imovel', 'sicar']
 
 const MUNICIPALITY_ALIASES = [
   'municipio',
@@ -83,6 +109,44 @@ function getPropertyByAliases(properties, aliases) {
     if (found) {
       return String(found[1]).trim()
     }
+  }
+
+  return null
+}
+
+function normalizeTextValue(value) {
+  const text = String(value ?? '').trim()
+  if (!text || text === '-') return null
+
+  return text
+}
+
+function extractCarNumberFromText(value) {
+  const text = normalizeTextValue(value)
+  if (!text) return null
+
+  const [match] = text.match(CAR_NUMBER_PATTERN) || []
+  return match ? match.toUpperCase() : null
+}
+
+function findCarNumberInProperties(properties = {}) {
+  const aliasMatch = normalizeTextValue(getPropertyByAliases(properties, CAR_NUMBER_ALIASES))
+  if (aliasMatch) return aliasMatch
+
+  const entries = Object.entries(properties || {})
+  const hintedEntries = entries.filter(([key]) => {
+    const normalizedKey = normalizeKey(key)
+    return CAR_NUMBER_KEY_HINTS.some((hint) => normalizedKey.includes(hint))
+  })
+
+  for (const [, value] of hintedEntries) {
+    const match = extractCarNumberFromText(value)
+    if (match) return match
+  }
+
+  for (const [, value] of entries) {
+    const match = extractCarNumberFromText(value)
+    if (match) return match
   }
 
   return null
@@ -283,10 +347,7 @@ async function buildPlacemarkFeature(placemark, index, fileName) {
   const extendedData = extractExtendedData(placemark)
   const flattenedCoordinates = flattenPolygons(polygons)
   const boundaryInfo = await lookupMunicipalityAndState(flattenedCoordinates)
-  const carNumber =
-    getPropertyByAliases(extendedData, CAR_NUMBER_ALIASES) ||
-    getPropertyByAliases({ name }, CAR_NUMBER_ALIASES) ||
-    name
+  const carNumber = findCarNumberInProperties(extendedData)
   const municipio =
     getPropertyByAliases(extendedData, MUNICIPALITY_ALIASES) ||
     boundaryInfo?.municipio ||
@@ -311,6 +372,7 @@ async function buildPlacemarkFeature(placemark, index, fileName) {
       id: `CAR-${slugify(sourceId) || index + 1}`,
       nome: name,
       numero_car_recibo: carNumber,
+      numero_car_imovel: carNumber,
       municipio,
       uf,
       area: informedAreaHa ?? areaHa,
@@ -518,7 +580,7 @@ async function buildShpFeature({ geometry, index, recordNumber, fileName, attrib
   const flattenedCoordinates = flattenPolygons(outerRings)
   const boundaryInfo = await lookupMunicipalityAndState(flattenedCoordinates)
   const areaHa = calculateMultiPolygonAreaHectares(outerRings)
-  const carNumber = getPropertyByAliases(attributes, CAR_NUMBER_ALIASES)
+  const carNumber = findCarNumberInProperties(attributes)
   const municipio =
     getPropertyByAliases(attributes, MUNICIPALITY_ALIASES) ||
     boundaryInfo?.municipio ||
@@ -537,6 +599,8 @@ async function buildShpFeature({ geometry, index, recordNumber, fileName, attrib
       id: `SHP-${slugify(carNumber || baseName)}-${suffix}`,
       nome: carNumber || (outerRings.length > 1 || index > 0 ? `${baseName} ${suffix}` : baseName),
       numero_car_recibo: carNumber,
+      numero_car_imovel: carNumber,
+      dbf_atributos_carregados: Boolean(attributes),
       municipio,
       uf,
       area: informedAreaHa ?? areaHa,

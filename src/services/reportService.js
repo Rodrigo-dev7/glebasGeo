@@ -27,11 +27,11 @@ function formatStatusIndicator(status) {
 
 function formatCarStatusLabel(carValidation) {
   const status = carValidation?.status
-  const primaryType = carValidation?.primaryMatch?.referenceType || 'CAR/KML'
+  const primaryType = carValidation?.primaryMatch?.referenceType || carValidation?.referenceType || 'CAR/KML'
 
   if (status === 'inside') return `Gleba dentro do ${primaryType}`
   if (status === 'partial') return `Gleba parcialmente dentro do ${primaryType}`
-  if (status === 'clear') return 'Fora do CAR/KML'
+  if (status === 'clear') return `Fora do ${primaryType}`
   if (status === 'not_loaded') return 'Nao analisado'
 
   return 'Nao analisado'

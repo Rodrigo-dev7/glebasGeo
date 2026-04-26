@@ -53,7 +53,7 @@ function buildCoordinateReference(featureId, coordinate, displayIndex) {
 
 function formatCarValidationStatusLabel(carValidation) {
   const status = carValidation?.status
-  const primaryType = carValidation?.primaryMatch?.referenceType || 'CAR/KML'
+  const primaryType = carValidation?.primaryMatch?.referenceType || carValidation?.referenceType || 'CAR/KML'
 
   if (status === 'inside') {
     return `Gleba dentro do ${primaryType}`
@@ -64,7 +64,7 @@ function formatCarValidationStatusLabel(carValidation) {
   }
 
   if (status === 'clear') {
-    return 'Fora do CAR/KML'
+    return `Fora do ${primaryType}`
   }
 
   return 'Nao analisado'
@@ -87,7 +87,6 @@ function CoordinateTable({
 
   return (
     <div className="coord-table-wrap">
-      <div className="panel-section-title">Coordenadas da gleba</div>
       <div className="coord-table">
         <div className="coord-table-head">
           <span>Ponto</span>
@@ -134,6 +133,7 @@ function CoordinateTable({
 function CarValidationSection({ carValidation }) {
   if (!carValidation) return null
 
+  const referenceType = carValidation.referenceType || carValidation.primaryMatch?.referenceType || 'CAR/KML'
   const statusLabel = formatCarValidationStatusLabel(carValidation)
   const matches = carValidation.inside?.length
     ? carValidation.inside
@@ -148,7 +148,7 @@ function CarValidationSection({ carValidation }) {
 
   return (
     <div className="panel-section">
-      <div className="panel-section-title">Validacao CAR/KML</div>
+      <div className="panel-section-title">Validacao {referenceType}</div>
       <div className={`car-validation-pill ${statusClass}`}>
         {statusLabel}
       </div>
@@ -160,7 +160,7 @@ function CarValidationSection({ carValidation }) {
 
       <div className="details-grid details-grid--full">
         <DetailRow label="Base de referencia" value={carValidation.referenceFileName} />
-        <DetailRow label="CAR/KML identificado" value={matchLabel} />
+        <DetailRow label={`${referenceType} identificado`} value={matchLabel} />
         <DetailRow label="Resultado" value={carValidation.message} />
       </div>
     </div>

@@ -10,9 +10,9 @@ const ITEMS = [
   { color: '#22c55e', label: 'Gleba valida' },
   { color: '#ef4444', label: 'Gleba com erro' },
   { color: '#38bdf8', label: 'Gleba encontrada' },
-  { color: '#facc15', label: 'Gleba dentro do CAR/KML' },
-  { color: '#fb923c', label: 'Gleba parcial no CAR/KML' },
-  { color: '#a855f7', label: 'Imovel CAR/KML' },
+  { color: '#facc15', label: 'Gleba dentro da base' },
+  { color: '#fb923c', label: 'Gleba parcial na base' },
+  { color: '#a855f7', label: 'Base de referencia' },
   { color: '#facc15', label: 'KML dentro de outro' },
 ]
 

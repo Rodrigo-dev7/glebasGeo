@@ -101,6 +101,27 @@ function getSingleCarReferenceFeatureId(dataset) {
   return features[0]?.properties?.id || null
 }
 
+function buildCarReferenceViewportRequest(dataset, featureId = null) {
+  if (!dataset?.datasetId) return null
+
+  const requestKey = featureId
+    ? `${dataset.datasetId}-${featureId}-${Date.now()}`
+    : `${dataset.datasetId}-${Date.now()}`
+
+  return featureId
+    ? {
+        type: 'car-feature',
+        datasetKey: dataset.datasetId,
+        featureId,
+        requestKey,
+      }
+    : {
+        type: 'car-reference',
+        datasetKey: dataset.datasetId,
+        requestKey,
+      }
+}
+
 function normalizeFileList(input) {
   if (!input) return []
   if (Array.isArray(input)) return input.filter(Boolean)
@@ -126,6 +147,11 @@ function getFileBaseName(file) {
 
 function buildCarReferenceImportItems(files = []) {
   const dbfFilesByBaseName = new Map()
+  const dbfFiles = files.filter((file) => getFileExtension(file) === 'dbf')
+  const shpFiles = files.filter((file) => getFileExtension(file) === 'shp')
+  const singleDbfFallback = dbfFiles.length === 1 && shpFiles.length === 1
+    ? dbfFiles[0]
+    : null
 
   files.forEach((file) => {
     if (getFileExtension(file) === 'dbf') {
@@ -140,7 +166,7 @@ function buildCarReferenceImportItems(files = []) {
         return { file, options: {}, fileName: file.name }
       }
 
-      const dbfFile = dbfFilesByBaseName.get(getFileBaseName(file)) || null
+      const dbfFile = dbfFilesByBaseName.get(getFileBaseName(file)) || singleDbfFallback || null
 
       return {
         file,
@@ -449,20 +475,7 @@ export function useGlebas() {
       const defaultFeatureId = getSingleCarReferenceFeatureId(nextCarDataset)
       setSelectedCarReferenceFeatureId(defaultFeatureId)
       syncCarValidationState(buildCarReferenceValidationDataset(nextCarDatasets))
-      setMapViewportRequest(
-        defaultFeatureId
-          ? {
-              type: 'car-feature',
-              datasetKey: nextCarDataset.datasetId,
-              featureId: defaultFeatureId,
-              requestKey: `${nextCarDataset.datasetId}-${defaultFeatureId}-${Date.now()}`,
-            }
-          : {
-              type: 'car-reference',
-              datasetKey: nextCarDataset.datasetId,
-              requestKey: `${nextCarDataset.datasetId}-${Date.now()}`,
-            }
-      )
+      setMapViewportRequest(buildCarReferenceViewportRequest(nextCarDataset, defaultFeatureId))
 
       if (failedImports.length) {
         setCarImportError(
@@ -487,6 +500,7 @@ export function useGlebas() {
     setSelectedCarReferenceFeatureId(defaultFeatureId)
     setCarImportError('')
     syncCarValidationState()
+    setMapViewportRequest(buildCarReferenceViewportRequest(nextCarDataset, defaultFeatureId))
   }, [carReferenceDatasets, syncCarValidationState])
 
   const selectCarReferenceFeature = useCallback((datasetId, featureId) => {
@@ -501,6 +515,7 @@ export function useGlebas() {
     setSelectedCarReferenceFeatureId(nextFeature.properties.id)
     setCarImportError('')
     syncCarValidationState()
+    setMapViewportRequest(buildCarReferenceViewportRequest(nextCarDataset, nextFeature.properties.id))
   }, [carReferenceDatasets, syncCarValidationState])
 
   const removeCarReferenceDataset = useCallback((datasetId) => {

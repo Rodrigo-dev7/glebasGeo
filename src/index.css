@@ -2707,10 +2707,6 @@ body.is-resizing-sidebar {
   pointer-events: none;
 }
 
-.globe-view__hud--legacy {
-  display: none;
-}
-
 .globe-view--map .globe-view__hud {
   border-color: rgba(104, 121, 113, 0.2);
   background: rgba(5, 7, 7, 0.72);

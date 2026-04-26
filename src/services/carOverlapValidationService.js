@@ -212,6 +212,21 @@ function resolveReferenceType(feature, metadata = null) {
     metadata?.sourceType ||
     ''
   ).toLowerCase()
+  const fileName = String(
+    properties.__carDatasetName ||
+    properties.origem_arquivo ||
+    metadata?.fileName ||
+    ''
+  ).toLowerCase()
+
+  if (
+    sourceType.includes('kml') ||
+    sourceType.includes('kmz') ||
+    fileName.endsWith('.kml') ||
+    fileName.endsWith('.kmz')
+  ) {
+    return 'KML'
+  }
 
   if (
     properties.numero_car_recibo ||
@@ -224,6 +239,27 @@ function resolveReferenceType(feature, metadata = null) {
   }
 
   return 'KML'
+}
+
+function summarizeReferenceType(types = []) {
+  const uniqueTypes = [...new Set(types.filter(Boolean))]
+
+  if (uniqueTypes.length === 1) return uniqueTypes[0]
+  if (uniqueTypes.length > 1) return 'CAR/KML'
+
+  return 'CAR/KML'
+}
+
+function resolveDatasetReferenceType(carGeojson, metadata = null) {
+  const features = carGeojson?.features || []
+
+  if (features.length) {
+    return summarizeReferenceType(
+      features.map((feature) => resolveReferenceType(feature, metadata))
+    )
+  }
+
+  return resolveReferenceType({ properties: {} }, metadata)
 }
 
 function getLayerKey(feature) {
@@ -265,23 +301,21 @@ function formatReferenceList(matches = []) {
 
 function formatRelationshipMessage(inside = [], partial = []) {
   if (inside.length) {
-    const [primary] = inside
-    const typeLabel = primary.referenceType || 'CAR/KML'
+    const typeLabel = summarizeReferenceType(inside.map((match) => match.referenceType))
     const names = formatReferenceList(inside)
 
     return inside.length === 1
       ? `Gleba dentro do ${typeLabel}: ${names || 'imovel identificado'}.`
-      : `Gleba dentro de ${inside.length} poligono(s) CAR/KML: ${names}.`
+      : `Gleba dentro de ${inside.length} poligono(s) ${typeLabel}: ${names}.`
   }
 
   if (partial.length) {
-    const [primary] = partial
-    const typeLabel = primary.referenceType || 'CAR/KML'
+    const typeLabel = summarizeReferenceType(partial.map((match) => match.referenceType))
     const names = formatReferenceList(partial)
 
     return partial.length === 1
       ? `Gleba parcialmente dentro do ${typeLabel}: ${names || 'imovel identificado'}.`
-      : `Gleba parcialmente dentro de ${partial.length} poligono(s) CAR/KML: ${names}.`
+      : `Gleba parcialmente dentro de ${partial.length} poligono(s) ${typeLabel}: ${names}.`
   }
 
   return 'Nenhuma relacao espacial encontrada com as bases CAR/KML carregadas.'
@@ -291,6 +325,7 @@ export function buildCarOverlapValidation(feature, carGeojson, metadata = null) 
   if (!carGeojson?.features?.length) {
     return {
       status: 'not_loaded',
+      referenceType: 'CAR/KML',
       overlapCount: 0,
       insideCount: 0,
       partialOverlapCount: 0,
@@ -304,6 +339,7 @@ export function buildCarOverlapValidation(feature, carGeojson, metadata = null) 
     }
   }
 
+  const referenceType = resolveDatasetReferenceType(carGeojson, metadata)
   const relations = carGeojson.features
     .map((carFeature) => {
       if (geometryContainsGeometry(carFeature.geometry, feature.geometry)) {
@@ -324,6 +360,7 @@ export function buildCarOverlapValidation(feature, carGeojson, metadata = null) 
 
   return {
     status,
+    referenceType,
     overlapCount: relations.length,
     insideCount: inside.length,
     partialOverlapCount: partialOverlaps.length,
@@ -332,7 +369,9 @@ export function buildCarOverlapValidation(feature, carGeojson, metadata = null) 
     partialOverlaps,
     primaryMatch: inside[0] || partialOverlaps[0] || null,
     referenceFileName: metadata?.fileName || null,
-    message: formatRelationshipMessage(inside, partialOverlaps),
+    message: relations.length
+      ? formatRelationshipMessage(inside, partialOverlaps)
+      : `Nenhuma relacao espacial encontrada com a base ${referenceType} carregada.`,
     validatedAt: new Date().toISOString(),
   }
 }

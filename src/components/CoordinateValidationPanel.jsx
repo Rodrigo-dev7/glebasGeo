@@ -470,7 +470,6 @@ export default function CoordinateValidationPanel({
       <div className="coord-panel-header">
         <div>
           <div className="coord-panel-kicker">Validação geoespacial</div>
-          <h2 className="coord-panel-title">Coordenadas da gleba</h2>
         </div>
       </div>
 

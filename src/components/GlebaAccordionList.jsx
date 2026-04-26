@@ -19,7 +19,7 @@ function buildCoordinateReference(properties, coordinate, displayIndex) {
 }
 
 function getCarValidationBadge(carValidation) {
-  const primaryType = carValidation?.primaryMatch?.referenceType || 'CAR/KML'
+  const primaryType = carValidation?.primaryMatch?.referenceType || carValidation?.referenceType || 'CAR/KML'
 
   if (carValidation?.status === 'inside') {
     return {
@@ -122,7 +122,7 @@ function GlebaAccordionCard({
             </div>
             {carValidationBadge && (
               <div className="gleba-accordion-field gleba-accordion-field--full gleba-accordion-field--car">
-                <span>Validacao CAR/KML</span>
+                <span>Validacao {properties.carOverlapValidation?.referenceType || 'CAR/KML'}</span>
                 <strong>{properties.carOverlapValidation?.message || carValidationBadge.label}</strong>
               </div>
             )}

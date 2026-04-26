@@ -562,9 +562,106 @@ function formatRelationList(relations = []) {
     .join(' | ')
 }
 
+const CAR_NUMBER_PROPERTY_ALIASES = [
+  'numero_car_imovel',
+  'numero_car_recibo',
+  'n_do_car',
+  'n_do_recibo',
+  'n_recibo',
+  'numero_do_car',
+  'numero_car',
+  'numero_recibo',
+  'num_car',
+  'num_recibo',
+  'nr_car',
+  'nr_recibo',
+  'nu_car',
+  'nu_recibo',
+  'recibo',
+  'recibo_car',
+  'car',
+  'cod_car',
+  'cod_imovel',
+  'codigo_imovel',
+  'codigo_car',
+  'codigo_sicar',
+  'cod_sicar',
+  'id_imovel',
+  'id_car',
+]
+const CAR_NUMBER_PATTERN = /\b[A-Z]{2}-\d{7}-[A-Z0-9]{8,}\b/i
+const CAR_NUMBER_KEY_HINTS = ['car', 'recibo', 'imovel', 'sicar']
+
+function normalizePropertyKey(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+}
+
+function normalizePropertyText(value) {
+  const text = String(value ?? '').trim()
+  if (!text || text === '-') return null
+
+  return text
+}
+
+function findPropertyByAliases(properties = {}, aliases = []) {
+  const entries = Object.entries(properties).map(([key, value]) => [
+    normalizePropertyKey(key),
+    value,
+  ])
+
+  for (const alias of aliases) {
+    const normalizedAlias = normalizePropertyKey(alias)
+    const found = entries.find(([key, value]) =>
+      key === normalizedAlias &&
+      value !== null &&
+      value !== undefined &&
+      value !== ''
+    )
+
+    if (found) return normalizePropertyText(found[1])
+  }
+
+  return null
+}
+
+function extractCarNumberFromText(value) {
+  const text = normalizePropertyText(value)
+  if (!text) return null
+
+  const [match] = text.match(CAR_NUMBER_PATTERN) || []
+  return match ? match.toUpperCase() : null
+}
+
+function findCarNumberInProperties(properties = {}) {
+  const aliasMatch = findPropertyByAliases(properties, CAR_NUMBER_PROPERTY_ALIASES)
+  if (aliasMatch) return aliasMatch
+
+  const entries = Object.entries(properties)
+  const hintedEntries = entries.filter(([key]) => {
+    const normalizedKey = normalizePropertyKey(key)
+    return CAR_NUMBER_KEY_HINTS.some((hint) => normalizedKey.includes(hint))
+  })
+
+  for (const [, value] of hintedEntries) {
+    const match = extractCarNumberFromText(value)
+    if (match) return match
+  }
+
+  for (const [, value] of entries) {
+    const match = extractCarNumberFromText(value)
+    if (match) return match
+  }
+
+  return null
+}
+
 function formatCarValidationStatusLabel(carValidation) {
   const status = carValidation?.status
-  const primaryType = carValidation?.primaryMatch?.referenceType || 'CAR/KML'
+  const primaryType = carValidation?.primaryMatch?.referenceType || carValidation?.referenceType || 'CAR/KML'
 
   if (status === 'inside') {
     return `Gleba dentro do ${primaryType}`
@@ -575,7 +672,7 @@ function formatCarValidationStatusLabel(carValidation) {
   }
 
   if (status === 'clear') {
-    return 'Gleba fora do CAR/KML'
+    return `Gleba fora do ${primaryType}`
   }
 
   return 'Nao analisado'
@@ -750,6 +847,7 @@ function popupMarkup(feature, areaOverride = null) {
     : carValidation?.partialOverlaps || []
   )
   const carValidationClass = getCarValidationPopupClass(carValidation?.status)
+  const carReferenceType = carValidation?.primaryMatch?.referenceType || carValidation?.referenceType || 'CAR/KML'
 
   return `
     <div class="gleba-popup">
@@ -771,7 +869,7 @@ function popupMarkup(feature, areaOverride = null) {
         </div>
         ${showCarValidation ? `
           <div class="popup-cell popup-cell--full ${carValidationClass}">
-            <span class="pcell-label">Validacao CAR/KML</span>
+            <span class="pcell-label">Validacao ${escapeHtml(carReferenceType)}</span>
             <span class="pcell-val">${escapeHtml(carStatusLabel)}</span>
           </div>
           ${carMatchLabel ? `
@@ -809,14 +907,15 @@ function glebaReferenceTooltipMarkup(feature) {
 
 function carReferencePopupMarkup(feature) {
   const properties = feature.properties || {}
+  const reference = getReferencePresentation(feature)
   const containment = properties.kmlContainment || {}
   const insideLabel = formatRelationList(containment.inside || [])
   const containsLabel = formatRelationList(containment.contains || [])
-  const carNumber =
-    properties.numero_car_recibo ||
-    properties.cod_imovel ||
-    properties.codigo_imovel ||
-    '-'
+  const carReferenceNumber = findCarNumberInProperties(properties)
+  const referenceIdentifier = reference.type === 'KML'
+    ? properties.nome || properties.id || '-'
+    : carReferenceNumber || '-'
+  const showCarReferenceNumber = reference.type === 'KML' && carReferenceNumber
   const municipalityUf = [
     properties.municipio || '-',
     properties.uf || null,
@@ -838,20 +937,26 @@ function carReferencePopupMarkup(feature) {
   return `
     <div class="gleba-popup">
       <div class="popup-top">
-        <div class="popup-nome">Im&oacute;vel do CAR</div>
+        <div class="popup-nome">${escapeHtml(reference.popupTitle)}</div>
       </div>
       <div class="popup-grid">
         <div class="popup-cell popup-cell--full">
-          <span class="pcell-label">N&ordm; do CAR</span>
-          <span class="pcell-val pcell-mono">${escapeHtml(carNumber)}</span>
+          <span class="pcell-label">${escapeHtml(reference.identifierLabel)}</span>
+          <span class="pcell-val pcell-mono">${escapeHtml(referenceIdentifier)}</span>
         </div>
+        ${showCarReferenceNumber ? `
+          <div class="popup-cell popup-cell--full">
+            <span class="pcell-label">Nº do CAR do imóvel</span>
+            <span class="pcell-val pcell-mono">${escapeHtml(carReferenceNumber)}</span>
+          </div>
+        ` : ''}
         <div class="popup-cell popup-cell--full">
           <span class="pcell-label">Munic&iacute;pio / UF</span>
           <span class="pcell-val">${escapeHtml(municipalityUf)}</span>
         </div>
         ${datasetName ? `
           <div class="popup-cell popup-cell--full">
-            <span class="pcell-label">Arquivo KML/KMZ</span>
+            <span class="pcell-label">${escapeHtml(reference.fileLabel)}</span>
             <span class="pcell-val">${escapeHtml(datasetName)}</span>
           </div>
         ` : ''}
@@ -861,13 +966,13 @@ function carReferencePopupMarkup(feature) {
         </div>
         ${insideLabel ? `
           <div class="popup-cell popup-cell--full popup-cell--contained">
-            <span class="pcell-label">KML dentro de</span>
+            <span class="pcell-label">${escapeHtml(reference.type)} dentro de</span>
             <span class="pcell-val">${escapeHtml(insideLabel)}</span>
           </div>
         ` : ''}
         ${containsLabel ? `
           <div class="popup-cell popup-cell--full popup-cell--contains">
-            <span class="pcell-label">Contem KML</span>
+            <span class="pcell-label">Contém ${escapeHtml(reference.type)}</span>
             <span class="pcell-val">${escapeHtml(containsLabel)}</span>
           </div>
         ` : ''}
@@ -1258,6 +1363,7 @@ function buildCarReferenceMapGeojson(datasets = []) {
           ...feature.properties,
           __carDatasetId: dataset.datasetId,
           __carDatasetName: dataset.metadata?.fileName || feature.properties?.origem_arquivo || 'Base CAR/KML',
+          __carDatasetSourceType: dataset.metadata?.sourceType || feature.properties?.sourceType || null,
           __carDatasetIndex: datasetIndex,
           __carLayerKey: getCarFeatureLayerKey(dataset.datasetId, featureId),
         },
@@ -2543,6 +2649,39 @@ function BasemapControl({ activeBasemap, onChange }) {
       ))}
     </div>
   )
+}
+
+function getReferencePresentation(feature) {
+  const properties = feature?.properties || {}
+  const sourceType = String(
+    properties.__carDatasetSourceType ||
+    properties.sourceType ||
+    ''
+  ).toLowerCase()
+  const fileName = String(
+    properties.__carDatasetName ||
+    properties.origem_arquivo ||
+    ''
+  ).toLowerCase()
+  const isKml =
+    sourceType.includes('kml') ||
+    sourceType.includes('kmz') ||
+    fileName.endsWith('.kml') ||
+    fileName.endsWith('.kmz')
+
+  return isKml
+    ? {
+        type: 'KML',
+        popupTitle: 'Área do KML',
+        identifierLabel: 'Identificação KML',
+        fileLabel: fileName.endsWith('.kmz') ? 'Arquivo KMZ' : 'Arquivo KML',
+      }
+    : {
+        type: 'CAR',
+        popupTitle: 'Imóvel do CAR',
+        identifierLabel: 'Nº do CAR',
+        fileLabel: 'Arquivo CAR/SHP',
+      }
 }
 
 function shouldShowDetailedMapForViewport(viewportRequest) {
