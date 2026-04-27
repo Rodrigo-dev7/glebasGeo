@@ -161,8 +161,8 @@ src/
     municipios-uf.json
 public/
   base-geoserver-municipios-index.json
-Base-GeoServer/
-  bases auxiliares locais em shapefile
+  Base-GeoServer/
+    bases auxiliares locais em shapefile
 ```
 
 ## Arquivos mais importantes
@@ -185,7 +185,7 @@ O projeto usa dados locais de apoio geografico:
 - `src/data/municipios-uf.json`
 - `src/data/ibge-municipios.json`
 - `public/base-geoserver-municipios-index.json`
-- arquivos em `Base-GeoServer/`
+- arquivos em `public/Base-GeoServer/`
 
 Esses arquivos apoiam o enriquecimento de municipio e UF e a organizacao das bases locais usadas no projeto.
 
