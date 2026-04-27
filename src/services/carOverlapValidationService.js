@@ -1,4 +1,6 @@
 const TOLERANCE = 1e-10
+const geometryBoundsCache = new WeakMap()
+const carReferenceEntryCache = new WeakMap()
 
 function nearlyEqual(a, b, tolerance = TOLERANCE) {
   return Math.abs(a - b) <= tolerance
@@ -45,6 +47,68 @@ function geometryToRings(geometry) {
   return geometryToPolygons(geometry).flatMap((polygon) =>
     (polygon || []).map((ring) => normalizeRing(ring))
   )
+}
+
+function calculateGeometryBounds(geometry) {
+  if (!geometry || typeof geometry !== 'object') return null
+  if (geometryBoundsCache.has(geometry)) return geometryBoundsCache.get(geometry)
+
+  const rings = geometryToRings(geometry)
+  let minLon = Infinity
+  let minLat = Infinity
+  let maxLon = -Infinity
+  let maxLat = -Infinity
+
+  rings.forEach((ring) => {
+    ring.forEach(([lon, lat]) => {
+      if (lon < minLon) minLon = lon
+      if (lon > maxLon) maxLon = lon
+      if (lat < minLat) minLat = lat
+      if (lat > maxLat) maxLat = lat
+    })
+  })
+
+  const bounds = Number.isFinite(minLon) && Number.isFinite(minLat)
+    ? { minLon, minLat, maxLon, maxLat }
+    : null
+
+  geometryBoundsCache.set(geometry, bounds)
+  return bounds
+}
+
+function boundsIntersect(leftBounds, rightBounds, tolerance = TOLERANCE) {
+  if (!leftBounds || !rightBounds) return false
+
+  return (
+    leftBounds.minLon <= rightBounds.maxLon + tolerance &&
+    leftBounds.maxLon >= rightBounds.minLon - tolerance &&
+    leftBounds.minLat <= rightBounds.maxLat + tolerance &&
+    leftBounds.maxLat >= rightBounds.minLat - tolerance
+  )
+}
+
+function boundsContain(containerBounds, innerBounds, tolerance = TOLERANCE) {
+  if (!containerBounds || !innerBounds) return false
+
+  return (
+    containerBounds.minLon - tolerance <= innerBounds.minLon &&
+    containerBounds.maxLon + tolerance >= innerBounds.maxLon &&
+    containerBounds.minLat - tolerance <= innerBounds.minLat &&
+    containerBounds.maxLat + tolerance >= innerBounds.maxLat
+  )
+}
+
+function getCarReferenceEntries(carGeojson) {
+  if (!carGeojson || typeof carGeojson !== 'object') return []
+  if (carReferenceEntryCache.has(carGeojson)) return carReferenceEntryCache.get(carGeojson)
+
+  const entries = (carGeojson.features || []).map((feature) => ({
+    feature,
+    bounds: calculateGeometryBounds(feature.geometry),
+  }))
+
+  carReferenceEntryCache.set(carGeojson, entries)
+  return entries
 }
 
 function geometryOuterRings(geometry) {
@@ -340,9 +404,17 @@ export function buildCarOverlapValidation(feature, carGeojson, metadata = null) 
   }
 
   const referenceType = resolveDatasetReferenceType(carGeojson, metadata)
-  const relations = carGeojson.features
-    .map((carFeature) => {
-      if (geometryContainsGeometry(carFeature.geometry, feature.geometry)) {
+  const featureBounds = calculateGeometryBounds(feature.geometry)
+  const relations = getCarReferenceEntries(carGeojson)
+    .map(({ feature: carFeature, bounds: carBounds }) => {
+      if (!boundsIntersect(featureBounds, carBounds)) {
+        return null
+      }
+
+      if (
+        boundsContain(carBounds, featureBounds) &&
+        geometryContainsGeometry(carFeature.geometry, feature.geometry)
+      ) {
         return summarizeCarFeature(carFeature, 'inside', metadata)
       }
 

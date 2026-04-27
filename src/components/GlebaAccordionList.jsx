@@ -18,6 +18,16 @@ function buildCoordinateReference(properties, coordinate, displayIndex) {
   }
 }
 
+function IconEye({ hidden = false }) {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+      <circle cx="12" cy="12" r="3" />
+      {hidden && <path d="M5 19 19 5" />}
+    </svg>
+  )
+}
+
 function getCarValidationBadge(carValidation) {
   const primaryType = carValidation?.primaryMatch?.referenceType || carValidation?.referenceType || 'CAR/KML'
 
@@ -53,8 +63,10 @@ function GlebaAccordionCard({
   gleba,
   isExpanded,
   isSelected,
+  isHidden = false,
   activeCoordinateIndex = null,
   onToggle,
+  onVisibilityToggle,
   onCoordinateActivate,
 }) {
   const properties = gleba.properties || {}
@@ -65,33 +77,49 @@ function GlebaAccordionCard({
 
   return (
     <article
-      className={`gleba-accordion-card ${isSelected ? 'is-selected' : ''}`}
+      className={`gleba-accordion-card ${isSelected ? 'is-selected' : ''}${isHidden ? ' is-hidden-map' : ''}`}
     >
-      <button
-        type="button"
-        className="gleba-accordion-trigger"
-        onClick={onToggle}
-        aria-expanded={isExpanded}
-      >
-        <div className="gleba-accordion-main">
-          <div className="gleba-accordion-name">{properties.nome}</div>
-          <div className="gleba-accordion-meta">
-            <span className={`gleba-accordion-status ${statusMeta.cls}`}>
-              {statusMeta.label}
-            </span>
-            <span className="gleba-accordion-id">{properties.id}</span>
-            {carValidationBadge && (
-              <span className={`gleba-accordion-car-badge ${carValidationBadge.className}`}>
-                {carValidationBadge.label}
+      <div className="gleba-accordion-head">
+        <button
+          type="button"
+          className="gleba-accordion-trigger"
+          onClick={onToggle}
+          aria-expanded={isExpanded}
+        >
+          <div className="gleba-accordion-main">
+            <div className="gleba-accordion-name">{properties.nome}</div>
+            <div className="gleba-accordion-meta">
+              <span className={`gleba-accordion-status ${statusMeta.cls}`}>
+                {statusMeta.label}
               </span>
-            )}
+              <span className="gleba-accordion-id">{properties.id}</span>
+              {carValidationBadge && (
+                <span className={`gleba-accordion-car-badge ${carValidationBadge.className}`}>
+                  {carValidationBadge.label}
+                </span>
+              )}
+              {isHidden && (
+                <span className="gleba-accordion-hidden-badge">Oculta no mapa</span>
+              )}
+            </div>
           </div>
-        </div>
 
-        <span className="gleba-accordion-arrow" aria-hidden="true">
-          {isExpanded ? '^' : 'v'}
-        </span>
-      </button>
+          <span className="gleba-accordion-arrow" aria-hidden="true">
+            {isExpanded ? '^' : 'v'}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className={`gleba-visibility-toggle${isHidden ? ' is-hidden' : ''}`}
+          onClick={() => onVisibilityToggle?.(properties.id)}
+          aria-pressed={isHidden}
+          aria-label={isHidden ? `Mostrar ${properties.nome} no mapa` : `Ocultar ${properties.nome} no mapa`}
+          title={isHidden ? 'Mostrar no mapa' : 'Ocultar do mapa'}
+        >
+          <IconEye hidden={isHidden} />
+        </button>
+      </div>
 
       <div className={`gleba-accordion-content ${isExpanded ? 'is-open' : ''}`}>
         <div className="gleba-accordion-inner">
@@ -180,6 +208,8 @@ export default function GlebaAccordionList({
   glebas = [],
   selectedGleba,
   setSelectedGleba,
+  hiddenFeatureIds = [],
+  onVisibilityToggle,
   activeVertexReference = null,
   onActiveVertexChange,
 }) {
@@ -204,6 +234,7 @@ export default function GlebaAccordionList({
   }, [activeVertexReference])
 
   const expandedIdSet = useMemo(() => new Set(expandedIds), [expandedIds])
+  const hiddenFeatureIdSet = useMemo(() => new Set(hiddenFeatureIds), [hiddenFeatureIds])
 
   const handleToggle = (gleba) => {
     const featureId = gleba.properties.id
@@ -253,12 +284,14 @@ export default function GlebaAccordionList({
             gleba={gleba}
             isExpanded={expandedIdSet.has(gleba.properties.id)}
             isSelected={selectedGleba?.properties?.id === gleba.properties.id}
+            isHidden={hiddenFeatureIdSet.has(gleba.properties.id)}
             activeCoordinateIndex={
               activeVertexReference?.featureId === gleba.properties.id
                 ? activeVertexReference.displayIndex
                 : null
             }
             onToggle={() => handleToggle(gleba)}
+            onVisibilityToggle={onVisibilityToggle}
             onCoordinateActivate={(coordinate, index) => (
               handleCoordinateActivate(gleba, coordinate, index)
             )}

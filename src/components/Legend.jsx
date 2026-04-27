@@ -2,7 +2,7 @@
  * Legend.jsx
  * Legenda do mapa inserida como controle Leaflet nativo.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
 
@@ -18,13 +18,15 @@ const ITEMS = [
 
 export default function Legend() {
   const map = useMap()
+  const containerRef = useRef(null)
   const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
     const control = L.control({ position: 'bottomright' })
 
     control.onAdd = () => {
-      const div = L.DomUtil.create('div', `map-legend${isCollapsed ? ' map-legend--collapsed' : ''}`)
+      const div = L.DomUtil.create('div', 'map-legend')
+      containerRef.current = div
       L.DomEvent.disableClickPropagation(div)
       L.DomEvent.disableScrollPropagation(div)
 
@@ -39,7 +41,7 @@ export default function Legend() {
             title="${isCollapsed ? 'Expandir legenda' : 'Esconder legenda'}"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="${isCollapsed ? '6 9 12 15 18 9' : '6 15 12 9 18 15'}"></polyline>
+              <polyline points="6 15 12 9 18 15"></polyline>
             </svg>
           </button>
         </div>
@@ -73,8 +75,23 @@ export default function Legend() {
     }
 
     control.addTo(map)
-    return () => control.remove()
-  }, [isCollapsed, map])
+    return () => {
+      containerRef.current = null
+      control.remove()
+    }
+  }, [map])
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const toggleButton = container.querySelector('.legend-toggle')
+    container.classList.toggle('map-legend--collapsed', isCollapsed)
+    toggleButton?.classList.toggle('is-collapsed', isCollapsed)
+    toggleButton?.setAttribute('aria-expanded', String(!isCollapsed))
+    toggleButton?.setAttribute('aria-label', isCollapsed ? 'Expandir legenda' : 'Esconder legenda')
+    toggleButton?.setAttribute('title', isCollapsed ? 'Expandir legenda' : 'Esconder legenda')
+  }, [isCollapsed])
 
   return null
 }

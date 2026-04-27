@@ -34,6 +34,8 @@ export default function Sidebar({
   glebas,
   selectedGleba,
   setSelectedGleba,
+  hiddenFeatureIds = [],
+  toggleGlebaVisibility,
   activeVertexReference,
   onActiveVertexChange,
   importedDataset,
@@ -163,7 +165,9 @@ export default function Sidebar({
               aria-expanded={!sidebarCollapsed}
               title="Ocultar painel lateral"
             >
-              <IconPanelLeft />
+              <span className="sidebar-toggle-icon" aria-hidden="true">
+                <IconPanelLeft />
+              </span>
             </button>
           </div>
         </div>
@@ -223,6 +227,8 @@ export default function Sidebar({
               glebas={glebas?.features || []}
               selectedGleba={selectedGleba}
               setSelectedGleba={setSelectedGleba}
+              hiddenFeatureIds={hiddenFeatureIds}
+              onVisibilityToggle={toggleGlebaVisibility}
               activeVertexReference={activeVertexReference}
               onActiveVertexChange={onActiveVertexChange}
             />

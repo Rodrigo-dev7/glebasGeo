@@ -52,6 +52,8 @@ export default function App() {
     exportReport,
     matchedFeatureIds,
     visibleFeatureIds,
+    hiddenFeatureIds,
+    toggleGlebaVisibility,
     mapViewportRequest,
     updateFeatureCoordinates,
     updateSelectedGlebaCoordinates,
@@ -113,6 +115,11 @@ export default function App() {
     setActiveVertexReference(null)
   }
 
+  const selectedGlebaForMap =
+    selectedGleba?.properties?.id && hiddenFeatureIds.includes(selectedGleba.properties.id)
+      ? null
+      : selectedGleba
+
   return (
     <div className="app bg-geo-bg text-slate-100">
       <div className={`app-body flex min-h-0 overflow-hidden${!isSidebarVisible ? ' app-body--sidebar-collapsed' : ''}`}>
@@ -130,6 +137,8 @@ export default function App() {
           glebas={glebas}
           selectedGleba={selectedGleba}
           setSelectedGleba={setSelectedGleba}
+          hiddenFeatureIds={hiddenFeatureIds}
+          toggleGlebaVisibility={toggleGlebaVisibility}
           activeVertexReference={activeVertexReference}
           onActiveVertexChange={setActiveVertexReference}
           importedDataset={importedDataset}
@@ -183,7 +192,7 @@ export default function App() {
             activeCarReferenceDatasetId={activeCarReferenceDatasetId}
             selectedCarReferenceFeatureId={selectedCarReferenceFeatureId}
             onSelectCarReferenceFeature={selectCarReferenceFeature}
-            selectedGleba={selectedGleba}
+            selectedGleba={selectedGlebaForMap}
             setSelectedGleba={setSelectedGleba}
             activeVertexReference={activeVertexReference}
             onActiveVertexChange={setActiveVertexReference}
@@ -206,7 +215,9 @@ export default function App() {
             aria-label="Mostrar painel lateral"
             title="Mostrar painel lateral"
           >
-            <IconChevronRight />
+            <span className="sidebar-toggle-icon" aria-hidden="true">
+              <IconChevronRight />
+            </span>
           </button>
         )}
 
@@ -218,7 +229,9 @@ export default function App() {
             aria-label="Abrir painel lateral"
             title="Abrir painel lateral"
           >
-            <IconChevronRight />
+            <span className="sidebar-toggle-icon" aria-hidden="true">
+              <IconChevronRight />
+            </span>
           </button>
         )}
       </div>

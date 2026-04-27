@@ -54,12 +54,18 @@ const BASEMAPS = {
 function MapInvalidateOnLayout({ revision }) {
   const map = useMap()
   useEffect(() => {
-    const id = requestAnimationFrame(() => map.invalidateSize())
-    const timeouts = [180, 420, 720].map((delay) =>
-      setTimeout(() => map.invalidateSize(), delay)
+    const invalidateWithoutPan = () => {
+      map.invalidateSize({
+        animate: false,
+        pan: false,
+        debounceMoveend: true,
+      })
+    }
+
+    const timeouts = [280, 560].map((delay) =>
+      setTimeout(invalidateWithoutPan, delay)
     )
     return () => {
-      cancelAnimationFrame(id)
       timeouts.forEach(clearTimeout)
     }
   }, [revision, map])
@@ -1652,7 +1658,7 @@ function CarReferenceLayer({
     if (!candidate?.datasetId || !candidate?.featureId) return
 
     closeSelectorPopup()
-    onSelectFeature?.(candidate.datasetId, candidate.featureId)
+    onSelectFeature?.(candidate.datasetId, candidate.featureId, { focusMap: false })
 
     if (candidate.layer && options.openPopup) {
       candidate.layer.openPopup?.()
@@ -2838,9 +2844,9 @@ export default function MapView({
     ))
   }
 
-  const handleCarReferenceFeatureSelect = useCallback((datasetId, featureId) => {
+  const handleCarReferenceFeatureSelect = useCallback((datasetId, featureId, options = {}) => {
     if (!datasetId || !featureId) return
-    onSelectCarReferenceFeature?.(datasetId, featureId)
+    onSelectCarReferenceFeature?.(datasetId, featureId, options)
   }, [onSelectCarReferenceFeature])
 
   return (

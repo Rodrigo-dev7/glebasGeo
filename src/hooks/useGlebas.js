@@ -238,6 +238,7 @@ export function useGlebas() {
   const [queryPoint, setQueryPoint] = useState(null)
   const [matchedFeatureIds, setMatchedFeatureIds] = useState([])
   const [mapViewportRequest, setMapViewportRequest] = useState(null)
+  const [hiddenFeatureIds, setHiddenFeatureIds] = useState([])
 
   const carReferenceDatasetsWithContainment = useMemo(
     () => analyzeCarReferenceContainment(carReferenceDatasets),
@@ -264,6 +265,10 @@ export function useGlebas() {
   )
 
   const activeDataset = importedDataset?.geojson || EMPTY_DATASET
+  const hiddenFeatureIdSet = useMemo(
+    () => new Set(hiddenFeatureIds),
+    [hiddenFeatureIds]
+  )
 
   const applyCarValidationToDataset = useCallback(
     (geojson, carDataset = carReferenceValidationDataset) =>
@@ -326,12 +331,14 @@ export function useGlebas() {
       ids.add(selectedGleba.properties.id)
     }
 
-    return [...ids]
-  }, [filteredData, matchedFeatureIds, selectedGleba])
+    return [...ids].filter((featureId) => !hiddenFeatureIdSet.has(featureId))
+  }, [filteredData, hiddenFeatureIdSet, matchedFeatureIds, selectedGleba])
 
   const filteredFeatureIds = useMemo(
-    () => filteredData.features.map((feature) => feature.properties.id),
-    [filteredData]
+    () => filteredData.features
+      .map((feature) => feature.properties.id)
+      .filter((featureId) => !hiddenFeatureIdSet.has(featureId)),
+    [filteredData, hiddenFeatureIdSet]
   )
 
   const stats = useMemo(
@@ -376,6 +383,7 @@ export function useGlebas() {
       setValidationResult(null)
       setQueryPoint(null)
       setMatchedFeatureIds([])
+      setHiddenFeatureIds([])
       setMapViewportRequest({
         type: 'dataset',
         datasetKey: createImportedDatasetViewportKey(datasetWithCarValidation),
@@ -503,7 +511,7 @@ export function useGlebas() {
     setMapViewportRequest(buildCarReferenceViewportRequest(nextCarDataset, defaultFeatureId))
   }, [carReferenceDatasets, syncCarValidationState])
 
-  const selectCarReferenceFeature = useCallback((datasetId, featureId) => {
+  const selectCarReferenceFeature = useCallback((datasetId, featureId, options = {}) => {
     const nextCarDataset = carReferenceDatasets.find((dataset) => dataset.datasetId === datasetId)
     const nextFeature = nextCarDataset?.geojson?.features?.find(
       (feature) => feature.properties?.id === featureId
@@ -515,7 +523,9 @@ export function useGlebas() {
     setSelectedCarReferenceFeatureId(nextFeature.properties.id)
     setCarImportError('')
     syncCarValidationState()
-    setMapViewportRequest(buildCarReferenceViewportRequest(nextCarDataset, nextFeature.properties.id))
+    if (options.focusMap !== false) {
+      setMapViewportRequest(buildCarReferenceViewportRequest(nextCarDataset, nextFeature.properties.id))
+    }
   }, [carReferenceDatasets, syncCarValidationState])
 
   const removeCarReferenceDataset = useCallback((datasetId) => {
@@ -600,6 +610,7 @@ export function useGlebas() {
     setSelectedGleba(null)
     setActiveFilter('todas')
     setMatchedFeatureIds([])
+    setHiddenFeatureIds([])
     setMapViewportRequest({
       type: 'home',
       requestKey: `home-${Date.now()}`,
@@ -619,6 +630,7 @@ export function useGlebas() {
     setSelectedGleba(null)
     setActiveFilter('todas')
     setMatchedFeatureIds([])
+    setHiddenFeatureIds([])
     setMapViewportRequest({
       type: 'home',
       requestKey: `home-${Date.now()}`,
@@ -656,6 +668,7 @@ export function useGlebas() {
     })
 
     setMatchedFeatureIds((currentIds) => currentIds.filter((id) => id !== featureId))
+    setHiddenFeatureIds((currentIds) => currentIds.filter((id) => id !== featureId))
     setSelectedGleba((currentSelectedGleba) => (
       currentSelectedGleba?.properties?.id === featureId ? null : currentSelectedGleba
     ))
@@ -674,6 +687,16 @@ export function useGlebas() {
 
     return true
   }, [importedDataset, syncValidationStateForGeojson])
+
+  const toggleGlebaVisibility = useCallback((featureId) => {
+    if (!featureId) return
+
+    setHiddenFeatureIds((currentIds) => (
+      currentIds.includes(featureId)
+        ? currentIds.filter((id) => id !== featureId)
+        : [...currentIds, featureId]
+    ))
+  }, [])
 
   const validateCoordinate = useCallback(({ lat, lon }) => {
     const point = { lat, lon }
@@ -806,6 +829,8 @@ export function useGlebas() {
     allGlebas: activeDataset,
     validatedData: activeDataset,
     visibleFeatureIds,
+    hiddenFeatureIds,
+    toggleGlebaVisibility,
     stats,
     selectedGleba,
     setSelectedGleba,

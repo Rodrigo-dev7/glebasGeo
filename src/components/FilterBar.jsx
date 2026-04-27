@@ -36,10 +36,33 @@ function IconPending() {
   )
 }
 
-function IconChevron({ expanded }) {
+function IconTarget() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v3" />
+      <path d="M12 19v3" />
+      <path d="M2 12h3" />
+      <path d="M19 12h3" />
+    </svg>
+  )
+}
+
+function IconMarkers() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 21s5-4.7 5-10a5 5 0 0 0-10 0c0 5.3 5 10 5 10Z" />
+      <circle cx="12" cy="11" r="1.8" />
+      <path d="M6 19h12" />
+    </svg>
+  )
+}
+
+function IconChevron() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <polyline points={expanded ? '6 15 12 9 18 15' : '6 9 12 15 18 9'} />
+      <polyline points="6 15 12 9 18 15" />
     </svg>
   )
 }
@@ -54,11 +77,13 @@ const POINT_DISPLAY_OPTIONS = [
   {
     key: 'validated',
     label: 'Validar Pontos',
+    icon: IconTarget,
     description: 'Mostra os pontos de validacao em todas as glebas visiveis.',
   },
   {
     key: 'marked',
     label: 'Mostrar Marcadores',
+    icon: IconMarkers,
     description: 'Mostra todos os pontos marcados das glebas visiveis.',
   },
 ]
@@ -76,14 +101,14 @@ export default function FilterBar({
     <div className={`filter-bar${collapsed ? ' filter-bar--collapsed' : ''}`}>
       <button
         type="button"
-        className="filter-bar__toggle"
+        className={`filter-bar__toggle${collapsed ? ' is-collapsed' : ''}`}
         onClick={() => onCollapsedChange?.(!collapsed)}
         aria-expanded={!collapsed}
         aria-label={collapsed ? 'Expandir header do mapa' : 'Esconder header do mapa'}
         title={collapsed ? 'Expandir header' : 'Esconder header'}
       >
         <span className="filter-bar__toggle-icon">
-          <IconChevron expanded={!collapsed} />
+          <IconChevron />
         </span>
         <span>{collapsed ? 'Exibir' : 'Ocultar'}</span>
       </button>
@@ -93,18 +118,25 @@ export default function FilterBar({
         <strong className="filter-summary">Filtre a camada principal por status de validacao</strong>
         <div className="filter-point-mode">
           <div className="filter-point-mode__actions" role="group" aria-label="Visualizacao global dos pontos">
-            {POINT_DISPLAY_OPTIONS.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                className={`filter-point-mode__button ${pointDisplayMode === option.key ? 'is-active' : ''}`}
-                onClick={() => setPointDisplayMode?.(option.key)}
-                aria-pressed={pointDisplayMode === option.key}
-                title={option.description}
-              >
-                {option.label}
-              </button>
-            ))}
+            {POINT_DISPLAY_OPTIONS.map((option) => {
+              const Icon = option.icon
+
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  className={`filter-point-mode__button ${pointDisplayMode === option.key ? 'is-active' : ''}`}
+                  onClick={() => setPointDisplayMode?.(option.key)}
+                  aria-pressed={pointDisplayMode === option.key}
+                  title={option.description}
+                >
+                  <span className="filter-point-mode__icon" aria-hidden="true">
+                    <Icon />
+                  </span>
+                  <span>{option.label}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
       </div>
