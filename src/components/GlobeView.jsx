@@ -20,33 +20,60 @@ const STATUS_COLORS = {
 
 const GLOBE_THEMES = {
   satellite: {
-    sceneBackground: '#020712',
-    atmosphere: '#58c8ff',
-    atmosphereOpacity: 0.09,
-    ambient: '#7ebfff',
-    ambientIntensity: 0.55,
+    sceneBackground: '#01040b',
+    atmosphere: '#73d6ff',
+    atmosphereOpacity: 0.12,
+    ambient: '#9bd4ff',
+    ambientIntensity: 0.62,
     sun: '#ffffff',
-    sunIntensity: 2.6,
+    sunIntensity: 2.9,
     stars: '#d7efff',
-    starOpacity: 0.72,
+    starOpacity: 0.58,
+    milkyWay: '#9ec7ff',
+    milkyWayOpacity: 0.18,
+    nebulaA: '#4f7cff',
+    nebulaB: '#d9a4ff',
     hudLabel: 'Satelite global',
   },
   map: {
-    sceneBackground: '#050708',
-    atmosphere: '#59615e',
-    atmosphereOpacity: 0.06,
-    ambient: '#747976',
-    ambientIntensity: 0.34,
-    sun: '#d8dedb',
-    sunIntensity: 1.72,
-    stars: '#9aa49f',
-    starOpacity: 0.38,
+    sceneBackground: '#010403',
+    atmosphere: '#6fb98c',
+    atmosphereOpacity: 0.08,
+    ambient: '#8faaa0',
+    ambientIntensity: 0.42,
+    sun: '#edf6f1',
+    sunIntensity: 1.92,
+    stars: '#c6d8d1',
+    starOpacity: 0.48,
+    milkyWay: '#7dbb96',
+    milkyWayOpacity: 0.14,
+    nebulaA: '#2c7a54',
+    nebulaB: '#8aa39a',
     hudLabel: 'Mapa global',
   },
 }
 
 function normalizeGlobeVariant(variant) {
   return variant === 'map' || variant === 'dark' ? 'map' : 'satellite'
+}
+
+function createSeededRandom(seed) {
+  let value = seed
+
+  return () => {
+    value = (value + 0x6D2B79F5) | 0
+    let mixed = Math.imul(value ^ (value >>> 15), 1 | value)
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function randomBetween(random, min, max) {
+  return min + (max - min) * random()
+}
+
+function colorFromPalette(random, palette) {
+  return new THREE.Color(palette[Math.floor(random() * palette.length)] || palette[0])
 }
 
 function lonLatToVector3(lon, lat, radius = EARTH_RADIUS) {
@@ -220,8 +247,14 @@ function disposeObjectTree(root) {
   root?.traverse?.((object) => {
     object.geometry?.dispose?.()
     if (Array.isArray(object.material)) {
-      object.material.forEach((material) => material.dispose?.())
+      object.material.forEach((material) => {
+        material.map?.dispose?.()
+        material.alphaMap?.dispose?.()
+        material.dispose?.()
+      })
     } else {
+      object.material?.map?.dispose?.()
+      object.material?.alphaMap?.dispose?.()
       object.material?.dispose?.()
     }
   })
@@ -454,34 +487,382 @@ function createMonochromeEarthTexture(image) {
   return texture
 }
 
-function createStars(variant = 'satellite') {
-  const theme = GLOBE_THEMES[normalizeGlobeVariant(variant)]
+function createStarSpriteTexture() {
+  const size = 96
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+
+  gradient.addColorStop(0, 'rgba(255,255,255,1)')
+  gradient.addColorStop(0.18, 'rgba(255,255,255,0.92)')
+  gradient.addColorStop(0.46, 'rgba(255,255,255,0.28)')
+  gradient.addColorStop(1, 'rgba(255,255,255,0)')
+
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, size, size)
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
+function createNebulaTexture(primaryColor, secondaryColor) {
+  const size = 256
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const base = ctx.createRadialGradient(size * 0.46, size * 0.48, 0, size * 0.5, size * 0.5, size * 0.5)
+
+  base.addColorStop(0, 'rgba(255,255,255,0.22)')
+  base.addColorStop(0.22, primaryColor)
+  base.addColorStop(0.58, secondaryColor)
+  base.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = base
+  ctx.fillRect(0, 0, size, size)
+
+  ctx.globalCompositeOperation = 'screen'
+  for (let index = 0; index < 16; index += 1) {
+    const x = randomBetween(createSeededRandom(3200 + index), size * 0.12, size * 0.88)
+    const y = randomBetween(createSeededRandom(4200 + index), size * 0.12, size * 0.88)
+    const radius = randomBetween(createSeededRandom(5200 + index), size * 0.08, size * 0.22)
+    const cloud = ctx.createRadialGradient(x, y, 0, x, y, radius)
+
+    cloud.addColorStop(0, 'rgba(255,255,255,0.08)')
+    cloud.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = cloud
+    ctx.fillRect(0, 0, size, size)
+  }
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
+function createDeepSpaceBackdrop(variant = 'satellite') {
+  const globeVariant = normalizeGlobeVariant(variant)
+  const theme = GLOBE_THEMES[globeVariant]
+  const isMap = globeVariant === 'map'
+  const geometry = new THREE.SphereGeometry(68, 64, 48)
+  const material = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    depthTest: false,
+    uniforms: {
+      uBaseA: { value: new THREE.Color(theme.sceneBackground) },
+      uBaseB: { value: new THREE.Color(isMap ? '#03110b' : '#041126') },
+      uBaseC: { value: new THREE.Color(isMap ? '#052217' : '#0a1d3f') },
+      uNebulaA: { value: new THREE.Color(isMap ? '#2b8a5d' : '#355cc6') },
+      uNebulaB: { value: new THREE.Color(isMap ? '#9ec7aa' : '#9278d8') },
+      uDustTint: { value: new THREE.Color(isMap ? '#7dbb96' : '#89bcff') },
+      uGalaxyOpacity: { value: isMap ? 0.5 : 0.78 },
+      uStarOpacity: { value: isMap ? 0.48 : 0.62 },
+    },
+    vertexShader: `
+      varying vec3 vWorldDirection;
+
+      void main() {
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldDirection = normalize(worldPosition.xyz);
+        gl_Position = projectionMatrix * viewMatrix * worldPosition;
+      }
+    `,
+    fragmentShader: `
+      precision highp float;
+
+      varying vec3 vWorldDirection;
+      uniform vec3 uBaseA;
+      uniform vec3 uBaseB;
+      uniform vec3 uBaseC;
+      uniform vec3 uNebulaA;
+      uniform vec3 uNebulaB;
+      uniform vec3 uDustTint;
+      uniform float uGalaxyOpacity;
+      uniform float uStarOpacity;
+
+      float hash(vec3 point) {
+        point = fract(point * 0.3183099 + vec3(0.11, 0.17, 0.13));
+        point *= 17.0;
+        return fract(point.x * point.y * point.z * (point.x + point.y + point.z));
+      }
+
+      float noise(vec3 point) {
+        vec3 cell = floor(point);
+        vec3 local = fract(point);
+        local = local * local * (3.0 - 2.0 * local);
+
+        float n000 = hash(cell + vec3(0.0, 0.0, 0.0));
+        float n100 = hash(cell + vec3(1.0, 0.0, 0.0));
+        float n010 = hash(cell + vec3(0.0, 1.0, 0.0));
+        float n110 = hash(cell + vec3(1.0, 1.0, 0.0));
+        float n001 = hash(cell + vec3(0.0, 0.0, 1.0));
+        float n101 = hash(cell + vec3(1.0, 0.0, 1.0));
+        float n011 = hash(cell + vec3(0.0, 1.0, 1.0));
+        float n111 = hash(cell + vec3(1.0, 1.0, 1.0));
+
+        float nx00 = mix(n000, n100, local.x);
+        float nx10 = mix(n010, n110, local.x);
+        float nx01 = mix(n001, n101, local.x);
+        float nx11 = mix(n011, n111, local.x);
+        float nxy0 = mix(nx00, nx10, local.y);
+        float nxy1 = mix(nx01, nx11, local.y);
+        return mix(nxy0, nxy1, local.z);
+      }
+
+      float fbm(vec3 point) {
+        float value = 0.0;
+        float amplitude = 0.5;
+        for (int index = 0; index < 5; index += 1) {
+          value += amplitude * noise(point);
+          point = point * 2.03 + vec3(3.7, 1.9, 2.6);
+          amplitude *= 0.5;
+        }
+        return value;
+      }
+
+      float starLayer(vec3 direction, float scale, float threshold) {
+        vec3 cell = floor(direction * scale);
+        vec3 local = fract(direction * scale) - 0.5;
+        float seed = hash(cell);
+        float distanceToCenter = length(local);
+        float core = smoothstep(0.16, 0.0, distanceToCenter);
+        return core * smoothstep(threshold, 1.0, seed);
+      }
+
+      void main() {
+        vec3 direction = normalize(vWorldDirection);
+        vec3 galaxyNormal = normalize(vec3(0.14, 0.72, 0.68));
+        vec3 secondaryNormal = normalize(vec3(-0.52, 0.45, 0.73));
+        float heightShade = smoothstep(-0.85, 0.75, direction.y);
+        float deepShade = smoothstep(-0.35, 0.9, direction.z);
+        vec3 color = mix(uBaseA, uBaseB, heightShade * 0.72);
+        color = mix(color, uBaseC, deepShade * 0.22);
+
+        float bandDistance = abs(dot(direction, galaxyNormal));
+        float broadBand = exp(-bandDistance * bandDistance * 12.0);
+        float coreBand = exp(-bandDistance * bandDistance * 64.0);
+        float filamentNoise = fbm(direction * 4.4 + vec3(1.3, 0.2, 2.8));
+        float fineNoise = fbm(direction * 12.0 + vec3(4.0, 7.0, 2.0));
+        float dust = broadBand * smoothstep(0.18, 0.86, filamentNoise) * (0.36 + fineNoise * 0.42);
+        float coreDust = coreBand * smoothstep(0.34, 0.92, fineNoise);
+
+        float cloudA = smoothstep(0.52, 0.92, fbm(direction * 2.15 + vec3(1.6, 5.3, 3.2)));
+        float cloudB = smoothstep(0.58, 0.95, fbm(direction * 2.65 + vec3(8.1, 2.4, 6.3)));
+        float secondaryBand = exp(-pow(abs(dot(direction, secondaryNormal)), 2.0) * 42.0) * cloudB;
+
+        float ambientMist = smoothstep(0.5, 0.92, fbm(direction * 1.7 + vec3(7.4, 1.8, 9.2)));
+        float softDepth = smoothstep(-0.95, 0.7, direction.y) * smoothstep(-0.9, 0.95, direction.z);
+
+        color += uDustTint * dust * uGalaxyOpacity * 0.58;
+        color += uNebulaA * (cloudA * broadBand + secondaryBand * 0.45) * uGalaxyOpacity * 0.34;
+        color += uNebulaB * coreDust * uGalaxyOpacity * 0.24;
+        color += mix(uNebulaA, uDustTint, 0.55) * ambientMist * softDepth * uGalaxyOpacity * 0.12;
+
+        float fineStars = starLayer(direction, 168.0, 0.992) * 0.34;
+        float midStars = starLayer(direction + vec3(11.2, 4.3, 7.7), 92.0, 0.986) * 0.28;
+        float rareStars = starLayer(direction + vec3(2.8, 8.5, 1.2), 52.0, 0.993) * 0.32;
+        float starMask = (fineStars + midStars + rareStars) * uStarOpacity;
+        vec3 starColor = mix(vec3(0.63, 0.78, 1.0), vec3(1.0, 0.92, 0.78), hash(direction * 39.0));
+        color += starColor * starMask;
+
+        float vignette = 0.76 + smoothstep(-0.25, 0.85, direction.z) * 0.18;
+        color *= vignette;
+        color = pow(max(color, vec3(0.0)), vec3(1.08));
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `,
+  })
+  const backdrop = new THREE.Mesh(geometry, material)
+  backdrop.renderOrder = -1000
+  return backdrop
+}
+
+function createStarLayer({
+  variant,
+  count,
+  radiusMin,
+  radiusMax,
+  size,
+  opacity,
+  seed,
+  concentrated = false,
+}) {
+  const globeVariant = normalizeGlobeVariant(variant)
+  const theme = GLOBE_THEMES[globeVariant]
+  const random = createSeededRandom(seed)
   const geometry = new THREE.BufferGeometry()
   const positions = []
+  const colors = []
+  const palette = globeVariant === 'map'
+    ? [theme.stars, '#e7f5ed', '#7fba96', '#a3b8af', '#d6e3de']
+    : [theme.stars, '#ffffff', '#a9d5ff', '#7db6ff', '#ffe5b8', '#dabdff']
 
-  for (let index = 0; index < 700; index += 1) {
-    const radius = 18 + Math.random() * 30
-    const theta = Math.random() * Math.PI * 2
-    const phi = Math.acos(2 * Math.random() - 1)
+  for (let index = 0; index < count; index += 1) {
+    const radius = randomBetween(random, radiusMin, radiusMax)
+    const theta = random() * Math.PI * 2
+    const phi = concentrated
+      ? (Math.PI / 2) + ((random() - random()) * 0.34)
+      : Math.acos(2 * random() - 1)
+    const color = colorFromPalette(random, palette)
+
+    color.multiplyScalar(randomBetween(random, 0.5, 0.95))
     positions.push(
       radius * Math.sin(phi) * Math.cos(theta),
       radius * Math.sin(phi) * Math.sin(theta),
       radius * Math.cos(phi)
     )
+    colors.push(color.r, color.g, color.b)
   }
 
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
 
   return new THREE.Points(
     geometry,
     new THREE.PointsMaterial({
-      color: theme.stars,
-      size: 0.018,
+      size,
+      map: createStarSpriteTexture(),
+      vertexColors: true,
       transparent: true,
-      opacity: theme.starOpacity,
+      opacity,
       depthWrite: false,
+      depthTest: true,
+      alphaTest: 0.025,
+      blending: THREE.AdditiveBlending,
     })
   )
+}
+
+function createMilkyWayBand(variant = 'satellite') {
+  const globeVariant = normalizeGlobeVariant(variant)
+  const theme = GLOBE_THEMES[globeVariant]
+  const random = createSeededRandom(globeVariant === 'map' ? 5109 : 4109)
+  const geometry = new THREE.BufferGeometry()
+  const positions = []
+  const colors = []
+  const palette = globeVariant === 'map'
+    ? [theme.milkyWay, '#b7c9c0', '#60876d', '#d7e3dc']
+    : [theme.milkyWay, '#ffffff', '#7ea8ff', '#cab3ff', '#ffd7a8']
+
+  for (let index = 0; index < 2400; index += 1) {
+    const radius = randomBetween(random, 32, 54)
+    const theta = random() * Math.PI * 2
+    const bandOffset = (random() - random()) * 0.18
+    const color = colorFromPalette(random, palette).multiplyScalar(randomBetween(random, 0.45, 1.05))
+
+    positions.push(
+      radius * Math.cos(theta) * Math.cos(bandOffset),
+      radius * Math.sin(bandOffset) * randomBetween(random, 0.65, 1.35),
+      radius * Math.sin(theta) * Math.cos(bandOffset)
+    )
+    colors.push(color.r, color.g, color.b)
+  }
+
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+
+  const band = new THREE.Points(
+    geometry,
+    new THREE.PointsMaterial({
+      size: globeVariant === 'map' ? 0.017 : 0.021,
+      map: createStarSpriteTexture(),
+      vertexColors: true,
+      transparent: true,
+      opacity: theme.milkyWayOpacity,
+      depthWrite: false,
+      depthTest: true,
+      alphaTest: 0.02,
+      blending: THREE.AdditiveBlending,
+    })
+  )
+  band.rotation.set(0.44, 0.16, globeVariant === 'map' ? -0.58 : -0.46)
+
+  return band
+}
+
+function createNebulaSprites(variant = 'satellite') {
+  const globeVariant = normalizeGlobeVariant(variant)
+  const theme = GLOBE_THEMES[globeVariant]
+  const group = new THREE.Group()
+  const primary = globeVariant === 'map'
+    ? 'rgba(71, 160, 104, 0.24)'
+    : 'rgba(76, 122, 255, 0.28)'
+  const secondary = globeVariant === 'map'
+    ? 'rgba(190, 210, 198, 0.08)'
+    : 'rgba(205, 140, 255, 0.1)'
+  const texture = createNebulaTexture(primary, secondary)
+  const nebulae = [
+    { position: [-26, 7, -36], scale: [22, 12, 1], opacity: globeVariant === 'map' ? 0.06 : 0.09, rotation: -0.4 },
+    { position: [24, -9, -42], scale: [18, 10, 1], opacity: globeVariant === 'map' ? 0.045 : 0.07, rotation: 0.55 },
+    { position: [-10, -18, -48], scale: [26, 13, 1], opacity: globeVariant === 'map' ? 0.035 : 0.055, rotation: 0.12 },
+  ]
+
+  nebulae.forEach((item) => {
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: texture,
+        color: theme.nebulaA,
+        transparent: true,
+        opacity: item.opacity,
+        depthWrite: false,
+        depthTest: true,
+        blending: THREE.AdditiveBlending,
+      })
+    )
+
+    sprite.position.set(...item.position)
+    sprite.scale.set(...item.scale)
+    sprite.material.rotation = item.rotation
+    group.add(sprite)
+  })
+
+  group.userData.animate = (elapsed) => {
+    group.rotation.y = elapsed * 0.0018
+    group.rotation.x = Math.sin(elapsed * 0.04) * 0.035
+  }
+
+  return group
+}
+
+function createStars(variant = 'satellite') {
+  const globeVariant = normalizeGlobeVariant(variant)
+  const theme = GLOBE_THEMES[globeVariant]
+  const group = new THREE.Group()
+  const backdrop = createDeepSpaceBackdrop(globeVariant)
+  const distantStars = createStarLayer({
+    variant: globeVariant,
+    count: 1800,
+    radiusMin: 24,
+    radiusMax: 60,
+      size: globeVariant === 'map' ? 0.012 : 0.014,
+      opacity: theme.starOpacity * 0.46,
+    seed: globeVariant === 'map' ? 1181 : 1180,
+  })
+  const brightStars = createStarLayer({
+    variant: globeVariant,
+    count: 260,
+    radiusMin: 18,
+    radiusMax: 44,
+    size: globeVariant === 'map' ? 0.016 : 0.019,
+    opacity: theme.starOpacity * 0.72,
+    seed: globeVariant === 'map' ? 2201 : 2200,
+  })
+  const milkyWay = createMilkyWayBand(globeVariant)
+  const nebulae = createNebulaSprites(globeVariant)
+
+  group.add(backdrop, nebulae, milkyWay, distantStars, brightStars)
+  group.userData.animate = (elapsed) => {
+    group.rotation.y = elapsed * 0.0045
+    backdrop.rotation.y = elapsed * 0.0012
+    distantStars.rotation.y = elapsed * 0.002
+    brightStars.rotation.y = elapsed * 0.006
+    milkyWay.rotation.z += 0.00018
+    nebulae.userData.animate?.(elapsed)
+  }
+
+  return group
 }
 
 function createLineFromLonLatPoints(coordinates, color, options = {}) {
@@ -950,11 +1331,11 @@ export default function GlobeView({
 
       controls.update()
       const elapsed = performance.now() * 0.001
+      stars.userData?.animate?.(elapsed)
       if (globeVariant === 'map') {
         cyberOverlay?.userData?.animate?.(elapsed)
-        stars.rotation.y = elapsed * 0.006
-        atmosphere.material.opacity = theme.atmosphereOpacity + ((Math.sin(elapsed * 0.8) + 1) / 2) * 0.025
       }
+      atmosphere.material.opacity = theme.atmosphereOpacity + ((Math.sin(elapsed * 0.8) + 1) / 2) * 0.022
       if (!latestCameraPositionRef.current) {
         latestCameraPositionRef.current = new THREE.Vector3()
       }
