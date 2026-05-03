@@ -107,10 +107,9 @@ export default function FilterBar({
         aria-label={collapsed ? 'Expandir header do mapa' : 'Esconder header do mapa'}
         title={collapsed ? 'Expandir header' : 'Esconder header'}
       >
-        <span className="filter-bar__toggle-icon">
+        <span className="filter-bar__toggle-icon" aria-hidden="true">
           <IconChevron />
         </span>
-        <span>{collapsed ? 'Exibir' : 'Ocultar'}</span>
       </button>
 
       <div className="filter-bar__intro">

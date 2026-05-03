@@ -4552,9 +4552,13 @@ body {
   order: 3;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 7px 10px;
+  justify-content: center;
+  gap: 0;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
   border-radius: 999px;
   border: 1px solid rgba(103, 199, 255, 0.18);
   background: rgba(5, 11, 20, 0.38);
@@ -5691,8 +5695,11 @@ input:focus-visible,
 }
 
 .filter-bar__toggle {
-  min-height: 30px;
-  padding: 6px 10px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
 }
 
 .sidebar-expand-fab {
