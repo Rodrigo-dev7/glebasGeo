@@ -10,6 +10,14 @@ const DEFAULT_SIDEBAR_WIDTH = 320
 const SIDEBAR_WIDTH_STORAGE_KEY = 'glebasgeo:sidebar-width'
 const RESIZE_EDGE_HITBOX = 18
 
+function notifyLayoutAfterSidebarResize() {
+  if (typeof window !== 'undefined') {
+    window.requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'))
+    })
+  }
+}
+
 function IconPanelLeft() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -65,6 +73,9 @@ export default function Sidebar({
 }) {
   const sidebarRef = useRef(null)
   const isResizingRef = useRef(false)
+  const sidebarWidthRef = useRef(DEFAULT_SIDEBAR_WIDTH)
+  const pendingSidebarWidthRef = useRef(null)
+  const resizeFrameRef = useRef(null)
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window === 'undefined') return DEFAULT_SIDEBAR_WIDTH
 
@@ -75,20 +86,54 @@ export default function Sidebar({
   })
 
   useEffect(() => {
+    sidebarWidthRef.current = sidebarWidth
+  }, [sidebarWidth])
+
+  useEffect(() => {
+    const applySidebarWidth = (nextWidth) => {
+      sidebarWidthRef.current = nextWidth
+
+      if (sidebarRef.current) {
+        sidebarRef.current.style.width = `${nextWidth}px`
+      }
+    }
+
+    const scheduleSidebarWidth = (nextWidth) => {
+      pendingSidebarWidthRef.current = nextWidth
+
+      if (resizeFrameRef.current !== null) return
+
+      resizeFrameRef.current = window.requestAnimationFrame(() => {
+        resizeFrameRef.current = null
+
+        if (pendingSidebarWidthRef.current === null) return
+        applySidebarWidth(pendingSidebarWidthRef.current)
+      })
+    }
+
+    const finishResize = () => {
+      const finalWidth = pendingSidebarWidthRef.current ?? sidebarWidthRef.current
+      pendingSidebarWidthRef.current = null
+      applySidebarWidth(finalWidth)
+      setSidebarWidth(finalWidth)
+    }
+
     const handleMouseMove = (event) => {
       if (!isResizingRef.current || !sidebarRef.current) return
 
       const { left } = sidebarRef.current.getBoundingClientRect()
       const nextWidth = event.clientX - left
       const clampedWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, nextWidth))
-      setSidebarWidth(clampedWidth)
+      scheduleSidebarWidth(clampedWidth)
     }
 
     const handleMouseUp = () => {
       if (!isResizingRef.current) return
 
       isResizingRef.current = false
+      finishResize()
       document.body.classList.remove('is-resizing-sidebar')
+      notifyLayoutAfterSidebarResize()
     }
 
     window.addEventListener('mousemove', handleMouseMove)
@@ -97,7 +142,12 @@ export default function Sidebar({
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
+      if (resizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(resizeFrameRef.current)
+        resizeFrameRef.current = null
+      }
       document.body.classList.remove('is-resizing-sidebar')
+      notifyLayoutAfterSidebarResize()
     }
   }, [])
 
@@ -114,6 +164,15 @@ export default function Sidebar({
   }
 
   const handleResizeReset = () => {
+    sidebarWidthRef.current = DEFAULT_SIDEBAR_WIDTH
+    pendingSidebarWidthRef.current = null
+    if (resizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(resizeFrameRef.current)
+      resizeFrameRef.current = null
+    }
+    if (sidebarRef.current) {
+      sidebarRef.current.style.width = `${DEFAULT_SIDEBAR_WIDTH}px`
+    }
     setSidebarWidth(DEFAULT_SIDEBAR_WIDTH)
   }
 
@@ -131,6 +190,7 @@ export default function Sidebar({
   }
 
   const sidebarContentId = 'sidebar-content'
+  const renderedSidebarWidth = isResizingRef.current ? sidebarWidthRef.current : sidebarWidth
 
   return (
     <aside
@@ -139,7 +199,7 @@ export default function Sidebar({
       data-collapsed={sidebarCollapsed ? 'true' : 'false'}
       data-mobile={isMobile ? 'true' : 'false'}
       data-open={isMobileOpen ? 'true' : 'false'}
-      style={sidebarCollapsed ? undefined : { width: `${sidebarWidth}px` }}
+      style={sidebarCollapsed ? undefined : { width: `${renderedSidebarWidth}px` }}
       aria-hidden={sidebarCollapsed}
       onMouseDown={handleSidebarMouseDown}
     >

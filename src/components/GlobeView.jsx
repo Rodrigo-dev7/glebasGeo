@@ -11,6 +11,11 @@ const BRAZIL_TARGET = {
 }
 const INTRO_DURATION_MS = 7600
 const EARTH_TEXTURE_URL = 'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg'
+const GLOBE_MIN_DISTANCE = 2.75
+const GLOBE_MAX_DISTANCE = 18
+
+let cachedEarthSourceImage = null
+let earthSourceImagePromise = null
 
 const STATUS_COLORS = {
   valida: '#22c55e',
@@ -55,6 +60,31 @@ const GLOBE_THEMES = {
 
 function normalizeGlobeVariant(variant) {
   return variant === 'map' || variant === 'dark' ? 'map' : 'satellite'
+}
+
+function loadEarthSourceImage() {
+  if (cachedEarthSourceImage) {
+    return Promise.resolve(cachedEarthSourceImage)
+  }
+
+  if (!earthSourceImagePromise) {
+    earthSourceImagePromise = new Promise((resolve, reject) => {
+      const textureLoader = new THREE.TextureLoader()
+      textureLoader.setCrossOrigin('anonymous')
+      textureLoader.load(
+        EARTH_TEXTURE_URL,
+        (texture) => {
+          cachedEarthSourceImage = texture.image
+          texture.dispose()
+          resolve(cachedEarthSourceImage)
+        },
+        undefined,
+        reject
+      )
+    })
+  }
+
+  return earthSourceImagePromise
 }
 
 function createSeededRandom(seed) {
@@ -439,6 +469,15 @@ function createEarthTexture(variant = 'satellite') {
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   texture.anisotropy = 8
+
+  return texture
+}
+
+function createPhotographicEarthTexture(image) {
+  const texture = new THREE.Texture(image)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.anisotropy = 8
+  texture.needsUpdate = true
 
   return texture
 }
@@ -1168,6 +1207,15 @@ export default function GlobeView({
   const onIntroCompleteRef = useRef(onIntroComplete)
   const onIntroSkipRef = useRef(onIntroSkip)
   const lastViewportRequestKeyRef = useRef(null)
+  const visualThemeRef = useRef(theme)
+  const earthMaterialRef = useRef(null)
+  const atmosphereMaterialRef = useRef(null)
+  const sunLightRef = useRef(null)
+  const ambientLightRef = useRef(null)
+  const satelliteStarsRef = useRef(null)
+  const mapStarsRef = useRef(null)
+  const cyberOverlayRef = useRef(null)
+  const earthTextureLoadIdRef = useRef(0)
   const layerGroup = useMemo(
     () => createLayerGroup({
       glebas,
@@ -1176,7 +1224,7 @@ export default function GlobeView({
       selectedId,
       selectedCarLayerKeys,
     }),
-    [carGeojson, glebas, globeVariant, selectedCarLayerKeys, selectedId, visibleFeatureIds]
+    [carGeojson, glebas, selectedCarLayerKeys, selectedId, visibleFeatureIds]
   )
 
   useEffect(() => {
@@ -1204,7 +1252,35 @@ export default function GlobeView({
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-    renderer.setSize(container.clientWidth || 1, container.clientHeight || 1)
+    renderer.domElement.style.display = 'block'
+    renderer.domElement.style.width = '100%'
+    renderer.domElement.style.height = '100%'
+
+    let resizeFrameId = null
+    const lastRendererSize = { width: 0, height: 0 }
+    const syncRendererSize = () => {
+      const width = container.clientWidth || 1
+      const height = container.clientHeight || 1
+      if (width === lastRendererSize.width && height === lastRendererSize.height) {
+        return
+      }
+
+      lastRendererSize.width = width
+      lastRendererSize.height = height
+      camera.aspect = width / height
+      camera.updateProjectionMatrix()
+      renderer.setSize(width, height, false)
+    }
+    const scheduleRendererResize = () => {
+      if (resizeFrameId !== null) return
+
+      resizeFrameId = window.requestAnimationFrame(() => {
+        resizeFrameId = null
+        syncRendererSize()
+      })
+    }
+
+    syncRendererSize()
     container.appendChild(renderer.domElement)
 
     const controls = new OrbitControls(camera, renderer.domElement)
@@ -1212,8 +1288,8 @@ export default function GlobeView({
     controls.dampingFactor = 0.07
     controls.rotateSpeed = 0.55
     controls.zoomSpeed = 0.72
-    controls.minDistance = 2.75
-    controls.maxDistance = introAnimation ? 12 : 9
+    controls.minDistance = GLOBE_MIN_DISTANCE
+    controls.maxDistance = GLOBE_MAX_DISTANCE
     controls.enablePan = false
     controls.enabled = !introAnimation
     controlsRef.current = controls
@@ -1239,34 +1315,7 @@ export default function GlobeView({
       })
     )
     scene.add(earth)
-
-    let isDisposed = false
-    let remoteEarthTexture = null
-    const textureLoader = new THREE.TextureLoader()
-    textureLoader.setCrossOrigin('anonymous')
-    textureLoader.load(
-      EARTH_TEXTURE_URL,
-      (texture) => {
-        if (isDisposed) {
-          texture.dispose()
-          return
-        }
-
-        if (globeVariant === 'map') {
-          remoteEarthTexture = createMonochromeEarthTexture(texture.image)
-          texture.dispose()
-        } else {
-          remoteEarthTexture = texture
-          texture.colorSpace = THREE.SRGBColorSpace
-          texture.anisotropy = 8
-        }
-
-        earth.material.map = remoteEarthTexture
-        earth.material.needsUpdate = true
-      },
-      undefined,
-      () => {}
-    )
+    earthMaterialRef.current = earth.material
 
     const atmosphere = new THREE.Mesh(
       new THREE.SphereGeometry(EARTH_RADIUS * 1.018, 96, 64),
@@ -1279,25 +1328,30 @@ export default function GlobeView({
       })
     )
     scene.add(atmosphere)
+    atmosphereMaterialRef.current = atmosphere.material
 
-    const cyberOverlay = globeVariant === 'map' ? createCyberOverlay() : null
-    if (cyberOverlay) scene.add(cyberOverlay)
-
-    const stars = createStars(globeVariant)
-    scene.add(stars)
+    const satelliteStars = createStars('satellite')
+    const mapStars = createStars('map')
+    const cyberOverlay = createCyberOverlay()
+    satelliteStars.visible = globeVariant !== 'map'
+    mapStars.visible = globeVariant === 'map'
+    cyberOverlay.visible = globeVariant === 'map'
+    scene.add(satelliteStars, mapStars, cyberOverlay)
+    satelliteStarsRef.current = satelliteStars
+    mapStarsRef.current = mapStars
+    cyberOverlayRef.current = cyberOverlay
     sceneRef.current = scene
 
     const sun = new THREE.DirectionalLight(theme.sun, theme.sunIntensity)
     sun.position.set(4, 3, 5)
     scene.add(sun)
-    scene.add(new THREE.AmbientLight(theme.ambient, theme.ambientIntensity))
+    sunLightRef.current = sun
+    const ambient = new THREE.AmbientLight(theme.ambient, theme.ambientIntensity)
+    scene.add(ambient)
+    ambientLightRef.current = ambient
 
     const resizeObserver = new ResizeObserver(() => {
-      const width = container.clientWidth || 1
-      const height = container.clientHeight || 1
-      camera.aspect = width / height
-      camera.updateProjectionMatrix()
-      renderer.setSize(width, height)
+      scheduleRendererResize()
     })
     resizeObserver.observe(container)
 
@@ -1313,7 +1367,7 @@ export default function GlobeView({
           introTween.completed = true
           introTweenRef.current = null
           controls.enabled = true
-          controls.maxDistance = 9
+          controls.maxDistance = GLOBE_MAX_DISTANCE
           onIntroCompleteRef.current?.()
         }
       }
@@ -1331,38 +1385,126 @@ export default function GlobeView({
 
       controls.update()
       const elapsed = performance.now() * 0.001
-      stars.userData?.animate?.(elapsed)
-      if (globeVariant === 'map') {
-        cyberOverlay?.userData?.animate?.(elapsed)
-      }
-      atmosphere.material.opacity = theme.atmosphereOpacity + ((Math.sin(elapsed * 0.8) + 1) / 2) * 0.022
+      const currentTheme = visualThemeRef.current
+      satelliteStars.userData?.animate?.(elapsed)
+      mapStars.userData?.animate?.(elapsed)
+      cyberOverlay.userData?.animate?.(elapsed)
+      atmosphere.material.opacity = currentTheme.atmosphereOpacity + ((Math.sin(elapsed * 0.8) + 1) / 2) * 0.022
       if (!latestCameraPositionRef.current) {
         latestCameraPositionRef.current = new THREE.Vector3()
       }
       latestCameraPositionRef.current.copy(camera.position)
+      syncRendererSize()
       renderer.render(scene, camera)
       frameId = requestAnimationFrame(animate)
     }
     animate()
 
     return () => {
-      isDisposed = true
+      earthTextureLoadIdRef.current += 1
       if (frameId !== null) cancelAnimationFrame(frameId)
+      if (resizeFrameId !== null) cancelAnimationFrame(resizeFrameId)
       resizeObserver.disconnect()
       controls.dispose()
-      earthTexture.dispose()
-      remoteEarthTexture?.dispose?.()
       disposeObjectTree(scene)
       cameraRef.current = null
       controlsRef.current = null
       sceneRef.current = null
       layerGroupRef.current = null
+      earthMaterialRef.current = null
+      atmosphereMaterialRef.current = null
+      sunLightRef.current = null
+      ambientLightRef.current = null
+      satelliteStarsRef.current = null
+      mapStarsRef.current = null
+      cyberOverlayRef.current = null
       tweenRef.current = null
       introTweenRef.current = null
       renderer.dispose()
       renderer.domElement.remove()
     }
-  }, [globeVariant])
+  }, [])
+
+  useEffect(() => {
+    visualThemeRef.current = theme
+
+    const earthMaterial = earthMaterialRef.current
+    const atmosphereMaterial = atmosphereMaterialRef.current
+    const sunLight = sunLightRef.current
+    const ambientLight = ambientLightRef.current
+    const satelliteStars = satelliteStarsRef.current
+    const mapStars = mapStarsRef.current
+    const cyberOverlay = cyberOverlayRef.current
+    const scene = sceneRef.current
+
+    if (scene) {
+      scene.background = new THREE.Color(theme.sceneBackground)
+    }
+
+    if (satelliteStars) {
+      satelliteStars.visible = globeVariant !== 'map'
+    }
+
+    if (mapStars) {
+      mapStars.visible = globeVariant === 'map'
+    }
+
+    if (cyberOverlay) {
+      cyberOverlay.visible = globeVariant === 'map'
+    }
+
+    if (atmosphereMaterial) {
+      atmosphereMaterial.color.set(theme.atmosphere)
+      atmosphereMaterial.opacity = theme.atmosphereOpacity
+      atmosphereMaterial.needsUpdate = true
+    }
+
+    if (sunLight) {
+      sunLight.color.set(theme.sun)
+      sunLight.intensity = theme.sunIntensity
+    }
+
+    if (ambientLight) {
+      ambientLight.color.set(theme.ambient)
+      ambientLight.intensity = theme.ambientIntensity
+    }
+
+    if (!earthMaterial) return undefined
+
+    const loadId = earthTextureLoadIdRef.current + 1
+    earthTextureLoadIdRef.current = loadId
+
+    const replaceEarthTexture = (texture) => {
+      if (earthTextureLoadIdRef.current !== loadId || earthMaterialRef.current !== earthMaterial) {
+        texture.dispose()
+        return
+      }
+
+      const previousTexture = earthMaterial.map
+      earthMaterial.map = texture
+      previousTexture?.dispose?.()
+      earthMaterial.needsUpdate = true
+    }
+
+    earthMaterial.roughness = globeVariant === 'map' ? 0.94 : 0.88
+    earthMaterial.metalness = globeVariant === 'map' ? 0.04 : 0
+    earthMaterial.emissive.set(globeVariant === 'map' ? '#030303' : '#000000')
+    earthMaterial.emissiveIntensity = globeVariant === 'map' ? 0.12 : 0
+    earthMaterial.needsUpdate = true
+
+    replaceEarthTexture(createEarthTexture(globeVariant))
+
+    loadEarthSourceImage()
+      .then((image) => {
+        const texture = globeVariant === 'map'
+          ? createMonochromeEarthTexture(image)
+          : createPhotographicEarthTexture(image)
+        replaceEarthTexture(texture)
+      })
+      .catch(() => {})
+
+    return undefined
+  }, [globeVariant, theme])
 
   useEffect(() => {
     const scene = sceneRef.current
@@ -1410,7 +1552,7 @@ export default function GlobeView({
     introTweenRef.current = null
     if (controlsRef.current) {
       controlsRef.current.enabled = true
-      controlsRef.current.maxDistance = 9
+      controlsRef.current.maxDistance = GLOBE_MAX_DISTANCE
     }
     onIntroSkipRef.current?.()
   }

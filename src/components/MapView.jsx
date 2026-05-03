@@ -72,6 +72,43 @@ function MapInvalidateOnLayout({ revision }) {
   return null
 }
 
+function MapInvalidateOnContainerResize() {
+  const map = useMap()
+  const frameRef = useRef(null)
+
+  useEffect(() => {
+    const container = map.getContainer()
+    if (!container || typeof ResizeObserver !== 'function') return undefined
+
+    const invalidateWithoutPan = () => {
+      frameRef.current = null
+
+      map.invalidateSize({
+        animate: false,
+        pan: false,
+        debounceMoveend: true,
+      })
+    }
+
+    const observer = new ResizeObserver(() => {
+      if (frameRef.current !== null) return
+      frameRef.current = window.requestAnimationFrame(invalidateWithoutPan)
+    })
+
+    observer.observe(container)
+
+    return () => {
+      observer.disconnect()
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current)
+        frameRef.current = null
+      }
+    }
+  }, [map])
+
+  return null
+}
+
 function MapZoomTracker({ onZoomChange }) {
   const map = useMap()
 
@@ -2865,6 +2902,7 @@ export default function MapView({
         closePopupOnClick={false}
       >
         <MapInvalidateOnLayout revision={layoutRevision} />
+        <MapInvalidateOnContainerResize />
         <MapZoomTracker onZoomChange={setMapZoom} />
         <Pane name="car-reference" style={{ zIndex: 360 }} />
         <Pane name="gleba-layer" style={{ zIndex: 460 }} />
