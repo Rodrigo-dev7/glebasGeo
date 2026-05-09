@@ -3,6 +3,7 @@ import { useGlebas } from './hooks/useGlebas'
 import Sidebar from './components/Sidebar'
 import MapView from './components/MapView'
 import FilterBar from './components/FilterBar'
+import ManualGlebaModal from './components/ManualGlebaModal'
 
 function IconChevronRight() {
   return (
@@ -19,6 +20,8 @@ export default function App() {
   const [pointDisplayMode, setPointDisplayMode] = useState('marked')
   const [activeVertexReference, setActiveVertexReference] = useState(null)
   const [isMapHeaderCollapsed, setIsMapHeaderCollapsed] = useState(false)
+  const [isManualGlebaModalOpen, setIsManualGlebaModalOpen] = useState(false)
+  const [manualGlebaText, setManualGlebaText] = useState('')
   const {
     glebas,
     allGlebas,
@@ -31,6 +34,7 @@ export default function App() {
     importError,
     isImporting,
     importDataset,
+    addManualGlebas,
     resetImportedDatasetCoordinates,
     removeGleba,
     clearImportedDataset,
@@ -115,6 +119,21 @@ export default function App() {
     setActiveVertexReference(null)
   }
 
+  const handleManualGlebaSubmit = async ({ text, showMarkers, validatePoints }) => {
+    const result = await addManualGlebas(text)
+
+    if (showMarkers) {
+      setPointDisplayMode('marked')
+    } else if (validatePoints) {
+      setPointDisplayMode('validated')
+    } else {
+      setPointDisplayMode('none')
+    }
+
+    setActiveVertexReference(null)
+    return result
+  }
+
   const selectedGlebaForMap =
     selectedGleba?.properties?.id && hiddenFeatureIds.includes(selectedGleba.properties.id)
       ? null
@@ -145,6 +164,7 @@ export default function App() {
           importError={importError}
           isImporting={isImporting}
           importDataset={importDataset}
+          onOpenManualGlebaModal={() => setIsManualGlebaModalOpen(true)}
           removeGleba={removeGleba}
           clearImportedDataset={clearImportedDataset}
           clearApplicationData={handleClearApplicationData}
@@ -235,6 +255,16 @@ export default function App() {
           </button>
         )}
       </div>
+
+      <ManualGlebaModal
+        open={isManualGlebaModalOpen}
+        onClose={() => setIsManualGlebaModalOpen(false)}
+        onSubmit={handleManualGlebaSubmit}
+        text={manualGlebaText}
+        onTextChange={setManualGlebaText}
+        defaultShowMarkers={pointDisplayMode === 'marked'}
+        defaultValidatePoints={pointDisplayMode === 'validated'}
+      />
     </div>
   )
 }

@@ -30,6 +30,16 @@ function IconLayer() {
   )
 }
 
+function IconAddGleba() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 17 9 7l6 10 3-5 2 5H4Z" />
+      <path d="M12 4v6" />
+      <path d="M9 7h6" />
+    </svg>
+  )
+}
+
 function IconClear() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -382,6 +392,7 @@ export default function CoordinateValidationPanel({
   importError,
   isImporting,
   importDataset,
+  onOpenManualGlebaModal,
   clearImportedDataset,
   clearApplicationData,
   carReferenceDataset,
@@ -516,6 +527,18 @@ export default function CoordinateValidationPanel({
             <IconLayer />
           </span>
           <span className="coord-action-btn__label">Importar KML/KMZ/SHP CAR</span>
+        </button>
+
+        <button
+          type="button"
+          className="coord-action-btn coord-action-btn--manual"
+          onClick={onOpenManualGlebaModal}
+          disabled={isImporting || isImportingCar}
+        >
+          <span className="coord-action-btn__icon">
+            <IconAddGleba />
+          </span>
+          <span className="coord-action-btn__label">Adicionar Gleba</span>
         </button>
 
         <button

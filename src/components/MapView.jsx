@@ -309,6 +309,10 @@ function getVisibleCoordinateIndexes({
 }) {
   if (!coordinates.length) return []
 
+  if (pointDisplayMode === 'none') {
+    return []
+  }
+
   if (pointDisplayMode !== 'validated') {
     return coordinates.map((_, index) => index)
   }

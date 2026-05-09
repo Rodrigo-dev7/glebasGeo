@@ -9,6 +9,7 @@ import { importDatasetFiles } from '../services/datasetImportService'
 import { validateCoordinateAgainstDataset } from '../services/coordinateValidationService'
 import { buildValidationReport, downloadValidationReport } from '../services/reportService'
 import { parseCarReferenceFile } from '../services/kmlGeoService'
+import { parseManualGlebaText } from '../services/manualGlebaTextService'
 import { normalizeCarReferenceDataset } from '../services/carReferenceFeatureService'
 import { analyzeCarReferenceContainment } from '../services/carContainmentAnalysisService'
 import {
@@ -88,6 +89,102 @@ function updateDatasetMetadataForGeojson(metadata = {}, geojson) {
     ...metadata,
     rowCount: countGeojsonRows(geojson),
     glebaCount: features.length,
+  }
+}
+
+function appendFeaturesToGeojson(geojson, features = []) {
+  return {
+    type: 'FeatureCollection',
+    features: [
+      ...(geojson?.features || []),
+      ...features,
+    ],
+  }
+}
+
+function createFeatureIdUsageMap(geojson) {
+  const usageMap = new Map()
+
+  ;(geojson?.features || []).forEach((feature) => {
+    const featureId = String(feature.properties?.id || '').trim()
+    if (!featureId) return
+
+    usageMap.set(featureId, true)
+  })
+
+  return usageMap
+}
+
+function buildUniqueFeatureId(baseId, usageMap) {
+  const normalizedBaseId = String(baseId || 'GLEBA').trim() || 'GLEBA'
+
+  if (!usageMap.has(normalizedBaseId)) {
+    usageMap.set(normalizedBaseId, true)
+    return normalizedBaseId
+  }
+
+  let suffix = 2
+  let candidate = `${normalizedBaseId} (${suffix})`
+
+  while (usageMap.has(candidate)) {
+    suffix += 1
+    candidate = `${normalizedBaseId} (${suffix})`
+  }
+
+  usageMap.set(candidate, true)
+  return candidate
+}
+
+function makeFeatureIdsUnique(features = [], currentGeojson) {
+  const usageMap = createFeatureIdUsageMap(currentGeojson)
+
+  return features.map((feature) => {
+    const originalFeatureId = feature.properties?.id || null
+    const nextFeatureId = buildUniqueFeatureId(originalFeatureId, usageMap)
+
+    return {
+      ...feature,
+      properties: {
+        ...feature.properties,
+        id: nextFeatureId,
+        originalFeatureId,
+      },
+    }
+  })
+}
+
+function normalizeMetadataArray(metadata, pluralKey, singleKey) {
+  return [
+    ...(metadata?.[pluralKey] || []),
+    metadata?.[singleKey],
+  ].filter(Boolean)
+}
+
+function buildManualMergedMetadata(currentMetadata, manualMetadata, geojson) {
+  const importedAt = new Date().toISOString()
+  const fileNames = [...new Set([
+    ...normalizeMetadataArray(currentMetadata, 'fileNames', 'fileName'),
+    ...(manualMetadata.fileNames || [manualMetadata.fileName]).filter(Boolean),
+  ])]
+  const sourceTypes = [...new Set([
+    ...normalizeMetadataArray(currentMetadata, 'sourceTypes', 'sourceType'),
+    ...(manualMetadata.sourceTypes || [manualMetadata.sourceType]).filter(Boolean),
+  ])]
+
+  return {
+    ...(currentMetadata || {}),
+    fileCount: fileNames.length || 1,
+    fileNames: fileNames.length ? fileNames : [manualMetadata.fileName],
+    fileName: fileNames.length > 1
+      ? `${fileNames.length} fontes`
+      : (fileNames[0] || manualMetadata.fileName || 'Dados manuais'),
+    sheetName: currentMetadata?.sheetName || null,
+    rowCount: countGeojsonRows(geojson),
+    glebaCount: geojson?.features?.length || 0,
+    importedAt,
+    sourceTypes,
+    sourceType: sourceTypes.length > 1 ? 'mixed' : (sourceTypes[0] || 'manual'),
+    datasetKey: `dataset-${importedAt}`,
   }
 }
 
@@ -394,6 +491,57 @@ export function useGlebas() {
       setIsImporting(false)
     }
   }, [applyCarValidationToDataset])
+
+  const addManualGlebas = useCallback(async (text) => {
+    const manualDataset = await parseManualGlebaText(text)
+    const manualFeatures = makeFeatureIdsUnique(
+      manualDataset.geojson.features,
+      importedDataset?.geojson
+    )
+    const manualFeatureIds = manualFeatures
+      .map((feature) => feature.properties?.id)
+      .filter(Boolean)
+    const currentGeojson = importedDataset?.geojson || EMPTY_DATASET
+    const currentSourceGeojson = importedDataset?.sourceGeojson || EMPTY_DATASET
+    const nextGeojsonBeforeCarValidation = appendFeaturesToGeojson(currentGeojson, manualFeatures)
+    const nextSourceGeojson = appendFeaturesToGeojson(currentSourceGeojson, manualFeatures)
+    const nextGeojson = applyCarValidationToDataset(nextGeojsonBeforeCarValidation)
+    const nextDataset = {
+      ...(importedDataset || {}),
+      geojson: nextGeojson,
+      sourceGeojson: nextSourceGeojson,
+      metadata: buildManualMergedMetadata(
+        importedDataset?.metadata,
+        manualDataset.metadata,
+        nextGeojson
+      ),
+    }
+    const firstManualFeature = nextGeojson.features.find(
+      (feature) => feature.properties?.id === manualFeatureIds[0]
+    ) || null
+
+    setImportedDataset(nextDataset)
+    setActiveFilter('todas')
+    setSelectedGleba(firstManualFeature)
+    setValidationResult(null)
+    setQueryPoint(null)
+    setMatchedFeatureIds([])
+    setHiddenFeatureIds((currentIds) =>
+      currentIds.filter((featureId) =>
+        nextGeojson.features.some((feature) => feature.properties?.id === featureId)
+      )
+    )
+    setMapViewportRequest({
+      type: 'feature-set',
+      featureIds: manualFeatureIds,
+      requestKey: `manual-gleba-${Date.now()}`,
+    })
+
+    return {
+      dataset: nextDataset,
+      features: manualFeatures,
+    }
+  }, [applyCarValidationToDataset, importedDataset])
 
   const resetImportedDatasetCoordinates = useCallback(() => {
     if (!importedDataset?.sourceGeojson?.features?.length) {
@@ -840,6 +988,7 @@ export function useGlebas() {
     importError,
     isImporting,
     importDataset,
+    addManualGlebas,
     resetImportedDatasetCoordinates,
     removeGleba,
     clearImportedDataset,

@@ -50,6 +50,7 @@ export default function Sidebar({
   importError,
   isImporting,
   importDataset,
+  onOpenManualGlebaModal,
   clearImportedDataset,
   clearApplicationData,
   carReferenceDataset,
@@ -258,24 +259,25 @@ export default function Sidebar({
           <CoordinateValidationPanel
             importedDataset={importedDataset}
             importError={importError}
-          isImporting={isImporting}
-          importDataset={importDataset}
-          clearImportedDataset={clearImportedDataset}
-          clearApplicationData={clearApplicationData}
-          carReferenceDataset={carReferenceDataset}
-          carReferenceDatasets={carReferenceDatasets}
-          activeCarReferenceDatasetId={activeCarReferenceDatasetId}
-          selectedCarReferenceFeatureId={selectedCarReferenceFeatureId}
-          carImportError={carImportError}
-          isImportingCar={isImportingCar}
-          importCarReferenceDataset={importCarReferenceDataset}
-          selectCarReferenceDataset={selectCarReferenceDataset}
-          selectCarReferenceFeature={selectCarReferenceFeature}
-          removeCarReferenceDataset={removeCarReferenceDataset}
-          clearCarReferenceDataset={clearCarReferenceDataset}
-          validationResult={validationResult}
-          validateCoordinate={validateCoordinate}
-          exportReport={exportReport}
+            isImporting={isImporting}
+            importDataset={importDataset}
+            onOpenManualGlebaModal={onOpenManualGlebaModal}
+            clearImportedDataset={clearImportedDataset}
+            clearApplicationData={clearApplicationData}
+            carReferenceDataset={carReferenceDataset}
+            carReferenceDatasets={carReferenceDatasets}
+            activeCarReferenceDatasetId={activeCarReferenceDatasetId}
+            selectedCarReferenceFeatureId={selectedCarReferenceFeatureId}
+            carImportError={carImportError}
+            isImportingCar={isImportingCar}
+            importCarReferenceDataset={importCarReferenceDataset}
+            selectCarReferenceDataset={selectCarReferenceDataset}
+            selectCarReferenceFeature={selectCarReferenceFeature}
+            removeCarReferenceDataset={removeCarReferenceDataset}
+            clearCarReferenceDataset={clearCarReferenceDataset}
+            validationResult={validationResult}
+            validateCoordinate={validateCoordinate}
+            exportReport={exportReport}
           />
         </div>
 
