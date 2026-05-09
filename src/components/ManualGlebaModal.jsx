@@ -27,7 +27,29 @@ function IconCoordinatePanel() {
   )
 }
 
-function ToggleControl({ label, checked, onChange }) {
+function IconMarkers() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 21s5-4.7 5-10a5 5 0 0 0-10 0c0 5.3 5 10 5 10Z" />
+      <circle cx="12" cy="11" r="1.8" />
+    </svg>
+  )
+}
+
+function IconTarget() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v3" />
+      <path d="M12 19v3" />
+      <path d="M2 12h3" />
+      <path d="M19 12h3" />
+    </svg>
+  )
+}
+
+function ToggleControl({ label, description, checked, onChange, icon: Icon }) {
   return (
     <button
       type="button"
@@ -35,11 +57,19 @@ function ToggleControl({ label, checked, onChange }) {
       onClick={() => onChange(!checked)}
       aria-pressed={checked}
     >
-      <span className="manual-gleba-toggle__label">{label}</span>
-      <span className="manual-gleba-toggle__control" aria-hidden="true">
-        <span className="manual-gleba-toggle__knob" />
+      <span className="manual-gleba-toggle__icon" aria-hidden="true">
+        <Icon />
       </span>
-      <span className="manual-gleba-toggle__state">{checked ? 'ON' : 'OFF'}</span>
+      <span className="manual-gleba-toggle__copy">
+        <span className="manual-gleba-toggle__label">{label}</span>
+        <span className="manual-gleba-toggle__description">{description}</span>
+      </span>
+      <span className="manual-gleba-toggle__status">
+        <span className="manual-gleba-toggle__control" aria-hidden="true">
+          <span className="manual-gleba-toggle__knob" />
+        </span>
+        <span className="manual-gleba-toggle__state">{checked ? 'ON' : 'OFF'}</span>
+      </span>
     </button>
   )
 }
@@ -143,18 +173,27 @@ export default function ManualGlebaModal({
           <div className="manual-gleba-options" aria-label="Opcoes de visualizacao">
             <ToggleControl
               label="Mostrar Marcadores"
+              description="Exibe os vertices no mapa"
               checked={showMarkers}
               onChange={setShowMarkers}
+              icon={IconMarkers}
             />
             <ToggleControl
               label="Validar Pontos"
+              description="Destaca pontos criticos"
               checked={validatePoints}
               onChange={setValidatePoints}
+              icon={IconTarget}
             />
           </div>
 
           <label className="manual-gleba-field">
-            <span className="manual-gleba-field-title">Coordenadas</span>
+            <span className="manual-gleba-field-title">
+              <span className="manual-gleba-field-title__icon" aria-hidden="true">
+                <IconCoordinatePanel />
+              </span>
+              Coordenadas
+            </span>
             <div className="manual-gleba-coordinate-panel">
               <div className="manual-gleba-coordinate-head" aria-hidden="true">
                 <span>Gleba</span>
