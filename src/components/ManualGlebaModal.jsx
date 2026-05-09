@@ -15,6 +15,18 @@ function IconClose() {
   )
 }
 
+function IconCoordinatePanel() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
+      <path d="M8 4v16" />
+      <path d="M15 4v16" />
+    </svg>
+  )
+}
+
 function ToggleControl({ label, checked, onChange }) {
   return (
     <button
@@ -107,8 +119,14 @@ export default function ManualGlebaModal({
         aria-labelledby="manual-gleba-title"
       >
         <header className="manual-gleba-header">
-          <div>
-            <h2 id="manual-gleba-title">Adicionar Gleba</h2>
+          <div className="manual-gleba-title-block">
+            <span className="manual-gleba-title-icon" aria-hidden="true">
+              <IconCoordinatePanel />
+            </span>
+            <div className="manual-gleba-title-copy">
+              <h2 id="manual-gleba-title">Adicionar Gleba</h2>
+              <p>Coordenadas georreferenciadas</p>
+            </div>
           </div>
 
           <button
@@ -136,14 +154,22 @@ export default function ManualGlebaModal({
           </div>
 
           <label className="manual-gleba-field">
-            <span>Coordenadas</span>
-            <textarea
-              value={text}
-              onChange={(event) => onTextChange?.(event.target.value)}
-              placeholder={SAMPLE_PLACEHOLDER}
-              spellCheck={false}
-              rows={8}
-            />
+            <span className="manual-gleba-field-title">Coordenadas</span>
+            <div className="manual-gleba-coordinate-panel">
+              <div className="manual-gleba-coordinate-head" aria-hidden="true">
+                <span>Gleba</span>
+                <span>Ponto</span>
+                <span>Latitude</span>
+                <span>Longitude</span>
+              </div>
+              <textarea
+                value={text}
+                onChange={(event) => onTextChange?.(event.target.value)}
+                placeholder={SAMPLE_PLACEHOLDER}
+                spellCheck={false}
+                rows={8}
+              />
+            </div>
           </label>
 
           {feedback && (
