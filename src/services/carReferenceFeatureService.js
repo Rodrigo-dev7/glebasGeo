@@ -118,20 +118,25 @@ export function dedupeCarReferenceFeatures(features = []) {
 
   return features.filter((feature) => {
     const key = getCarReferenceFeatureKey(feature)
-    const geometryKey = getCarReferenceGeometryKey(feature)
-
-    if ((key && seenKeys.has(key)) || (geometryKey && seenGeometryKeys.has(geometryKey))) {
-      return false
-    }
 
     if (key) {
+      if (seenKeys.has(key)) {
+        return false
+      }
+
       seenKeys.add(key)
+      return true
+    }
+
+    const geometryKey = getCarReferenceGeometryKey(feature)
+
+    if (geometryKey && seenGeometryKeys.has(geometryKey)) {
+      return false
     }
 
     if (geometryKey) {
       seenGeometryKeys.add(geometryKey)
     }
-
     return true
   })
 }

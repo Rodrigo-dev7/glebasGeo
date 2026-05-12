@@ -78,6 +78,80 @@ const AREA_ALIASES = [
   'area_liquida',
   'areaimovel',
 ]
+const KML_BOUNDARY_LOOKUP_FEATURE_LIMIT = 500
+const KML_PARSE_YIELD_INTERVAL = 250
+const XML_ENTITIES = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+}
+
+function decodeXmlText(value) {
+  return String(value ?? '')
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, code) => {
+      const normalizedCode = code.toLowerCase()
+
+      if (normalizedCode.startsWith('#x')) {
+        const parsed = Number.parseInt(normalizedCode.slice(2), 16)
+        return Number.isFinite(parsed) ? String.fromCodePoint(parsed) : entity
+      }
+
+      if (normalizedCode.startsWith('#')) {
+        const parsed = Number.parseInt(normalizedCode.slice(1), 10)
+        return Number.isFinite(parsed) ? String.fromCodePoint(parsed) : entity
+      }
+
+      return XML_ENTITIES[normalizedCode] || entity
+    })
+    .trim()
+}
+
+function createTagPattern(tagName, flags = 'i') {
+  return new RegExp(
+    `<(?:[\\w-]+:)?${tagName}\\b[^>]*>[\\s\\S]*?<\\/(?:[\\w-]+:)?${tagName}>`,
+    flags
+  )
+}
+
+function createTagContentPattern(tagName, flags = 'i') {
+  return new RegExp(
+    `<(?:[\\w-]+:)?${tagName}\\b[^>]*>([\\s\\S]*?)<\\/(?:[\\w-]+:)?${tagName}>`,
+    flags
+  )
+}
+
+function getTagBlocks(source, tagName) {
+  return [...String(source || '').matchAll(createTagPattern(tagName, 'gi'))].map((match) => match[0])
+}
+
+function getTagText(source, tagName) {
+  const match = String(source || '').match(createTagContentPattern(tagName))
+  return match ? decodeXmlText(match[1]) : null
+}
+
+function getOpeningTag(source, tagName) {
+  const match = String(source || '').match(new RegExp(`<(?:[\\w-]+:)?${tagName}\\b[^>]*>`, 'i'))
+  return match?.[0] || ''
+}
+
+function getAttributeValue(source, attributeName) {
+  const match = String(source || '').match(
+    new RegExp(`\\b${attributeName}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i')
+  )
+
+  return decodeXmlText(match?.[1] || match?.[2] || '')
+}
+
+function maybeYieldKmlParsing(index) {
+  if (index === 0 || index % KML_PARSE_YIELD_INTERVAL !== 0) {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
 
 function textContent(node, selector) {
   return node.querySelector(selector)?.textContent?.trim() || null
@@ -297,26 +371,38 @@ function parseCoordinatesText(coordinatesText) {
   return ensureClosedRing(coordinates)
 }
 
-function extractExtendedData(placemark) {
+function extractExtendedData(placemarkSource) {
   const properties = {}
 
-  placemark.querySelectorAll('ExtendedData Data').forEach((dataNode, index) => {
-    const key = dataNode.getAttribute('name') || `data_${index + 1}`
-    const value = textContent(dataNode, 'value')
+  getTagBlocks(placemarkSource, 'Data').forEach((dataBlock, index) => {
+    const key = getAttributeValue(getOpeningTag(dataBlock, 'Data'), 'name') || `data_${index + 1}`
+    const value = getTagText(dataBlock, 'value')
     if (value) {
       properties[key] = value
     }
   })
 
-  placemark.querySelectorAll('ExtendedData SchemaData SimpleData').forEach((dataNode, index) => {
-    const key = dataNode.getAttribute('name') || `schema_${index + 1}`
-    const value = dataNode.textContent?.trim()
+  getTagBlocks(placemarkSource, 'SimpleData').forEach((dataBlock, index) => {
+    const key = getAttributeValue(getOpeningTag(dataBlock, 'SimpleData'), 'name') || `schema_${index + 1}`
+    const value = decodeXmlText(
+      dataBlock.replace(/^<[^>]+>/, '').replace(/<\/[^>]+>$/, '')
+    )
     if (value) {
       properties[key] = value
     }
   })
 
   return properties
+}
+
+function extractPolygonRings(placemarkSource) {
+  return getTagBlocks(placemarkSource, 'Polygon')
+    .map((polygonBlock) => {
+      const outerBoundaryBlock = getTagBlocks(polygonBlock, 'outerBoundaryIs')[0] || polygonBlock
+      const linearRingBlock = getTagBlocks(outerBoundaryBlock, 'LinearRing')[0] || outerBoundaryBlock
+      return parseCoordinatesText(getTagText(linearRingBlock, 'coordinates'))
+    })
+    .filter((ring) => ring.length >= 4)
 }
 
 function flattenPolygons(polygons) {
@@ -332,44 +418,45 @@ function calculateMultiPolygonAreaHectares(polygons) {
   return area ? Number(area.toFixed(2)) : null
 }
 
-async function buildPlacemarkFeature(placemark, index, fileName) {
-  const polygonNodes = placemark.querySelectorAll('Polygon')
-  const polygons = [...polygonNodes]
-    .map((polygonNode) => parseCoordinatesText(textContent(polygonNode, 'outerBoundaryIs > LinearRing > coordinates')))
-    .filter((ring) => ring.length >= 4)
-
+async function buildPlacemarkFeature(placemarkSource, index, fileName, options = {}) {
+  const polygons = extractPolygonRings(placemarkSource)
   if (!polygons.length) {
     return null
   }
 
-  const name = textContent(placemark, 'name') || `Imovel CAR ${index + 1}`
-  const description = textContent(placemark, 'description')
-  const extendedData = extractExtendedData(placemark)
+  const extendedData = extractExtendedData(placemarkSource)
+  const placemarkId = getAttributeValue(getOpeningTag(placemarkSource, 'Placemark'), 'id')
+  const name =
+    getTagText(placemarkSource, 'name') ||
+    getPropertyByAliases(extendedData, ['numero_emb', 'numero_ai', 'processo', 'nome', 'name']) ||
+    `Area KML ${index + 1}`
+  const description = getTagText(placemarkSource, 'description')
   const flattenedCoordinates = flattenPolygons(polygons)
-  const boundaryInfo = await lookupMunicipalityAndState(flattenedCoordinates)
   const carNumber = findCarNumberInProperties(extendedData)
-  const municipio =
-    getPropertyByAliases(extendedData, MUNICIPALITY_ALIASES) ||
-    boundaryInfo?.municipio ||
-    null
-  const uf =
-    getPropertyByAliases(extendedData, UF_ALIASES) ||
-    boundaryInfo?.uf ||
-    null
+  const municipioFromProperties = getPropertyByAliases(extendedData, MUNICIPALITY_ALIASES)
+  const ufFromProperties = getPropertyByAliases(extendedData, UF_ALIASES)
+  const boundaryInfo = options.allowBoundaryLookup && (!municipioFromProperties || !ufFromProperties)
+    ? await lookupMunicipalityAndState(flattenedCoordinates)
+    : null
+  const municipio = municipioFromProperties || boundaryInfo?.municipio || null
+  const uf = ufFromProperties || boundaryInfo?.uf || null
   const areaHa = calculateMultiPolygonAreaHectares(polygons)
   const informedAreaHa = parseNumericValue(getPropertyByAliases(extendedData, AREA_ALIASES))
   const sourceId =
+    placemarkId ||
     carNumber ||
     extendedData.cod_imovel ||
     extendedData.codigo_imovel ||
     extendedData.id ||
+    extendedData.numero_emb ||
+    extendedData.numero_ai ||
     name
 
   return {
     type: 'Feature',
     properties: {
       ...extendedData,
-      id: `CAR-${slugify(sourceId) || index + 1}`,
+      id: `KML-${slugify(sourceId) || index + 1}`,
       nome: name,
       numero_car_recibo: carNumber,
       numero_car_imovel: carNumber,
@@ -395,22 +482,25 @@ async function buildPlacemarkFeature(placemark, index, fileName) {
 }
 
 async function parseKmlText(text, fileName) {
-  const parser = new DOMParser()
-  const xml = parser.parseFromString(text, 'application/xml')
-  const parserError = xml.querySelector('parsererror')
-
-  if (parserError) {
-    throw new Error('O arquivo KML do CAR nao possui uma estrutura XML valida.')
-  }
-
-  const placemarks = [...xml.querySelectorAll('Placemark')]
+  const placemarks = getTagBlocks(text, 'Placemark')
   if (!placemarks.length) {
     throw new Error('O arquivo informado nao possui placemarks para validar.')
   }
 
-  const features = (await Promise.all(
-    placemarks.map((placemark, index) => buildPlacemarkFeature(placemark, index, fileName))
-  )).filter(Boolean)
+  const allowBoundaryLookup = placemarks.length <= KML_BOUNDARY_LOOKUP_FEATURE_LIMIT
+  const features = []
+
+  for (let index = 0; index < placemarks.length; index += 1) {
+    const feature = await buildPlacemarkFeature(placemarks[index], index, fileName, {
+      allowBoundaryLookup,
+    })
+
+    if (feature) {
+      features.push(feature)
+    }
+
+    await maybeYieldKmlParsing(index)
+  }
 
   if (!features.length) {
     throw new Error('Nao encontrei poligonos validos no arquivo informado.')
@@ -426,8 +516,48 @@ async function parseKmlText(text, fileName) {
       sourceType: 'kml_car',
       rowCount: features.length,
       glebaCount: features.length,
+      placemarkCount: placemarks.length,
+      boundaryLookupSkipped: !allowBoundaryLookup,
       importedAt: new Date().toISOString(),
     },
+  })
+}
+
+function parseKmlFileInWorker(file) {
+  if (typeof Worker !== 'function') {
+    return null
+  }
+
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL('./kmlParserWorker.js', import.meta.url), {
+      type: 'module',
+    })
+    const requestId = `${file.name}-${Date.now()}`
+
+    worker.onmessage = (event) => {
+      const message = event.data || {}
+      if (message.requestId !== requestId) return
+
+      worker.terminate()
+
+      if (message.type === 'success') {
+        resolve(message.dataset)
+        return
+      }
+
+      reject(new Error(message.error || 'Nao foi possivel processar o arquivo KML.'))
+    }
+
+    worker.onerror = (event) => {
+      worker.terminate()
+      reject(new Error(event.message || 'Nao foi possivel iniciar o processamento do KML.'))
+    }
+
+    worker.postMessage({
+      type: 'parse-kml',
+      requestId,
+      file,
+    })
   })
 }
 
@@ -775,10 +905,20 @@ export async function parseCarReferenceFile(file, options = {}) {
   }
 
   if (lowerName.endsWith('.kml')) {
+    const workerResult = parseKmlFileInWorker(file)
+    if (workerResult) {
+      return workerResult
+    }
+
     return parseKmlText(await file.text(), file.name)
   }
 
   if (lowerName.endsWith('.kmz')) {
+    const workerResult = parseKmlFileInWorker(file)
+    if (workerResult) {
+      return workerResult
+    }
+
     const kmlText = await extractKmlTextFromKmz(file)
     const parsedDataset = await parseKmlText(kmlText, file.name)
 

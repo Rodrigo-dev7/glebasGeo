@@ -3,10 +3,9 @@
  * Mapa interativo com poligonos, vertices e destaque das criticas SICOR.
  */
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CircleMarker, MapContainer, Pane, Polyline, Popup, TileLayer, useMap } from 'react-leaflet'
+import { CircleMarker, MapContainer, Pane, Polyline, Popup, TileLayer, WMSTileLayer, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import Legend from './Legend'
-import { dedupeCarReferenceFeatures } from '../services/carReferenceFeatureService'
 import { getEditableCoordinates } from '../services/featureGeometryService'
 import { calculatePolygonAreaHectares } from '../services/glebaEnrichmentService'
 
@@ -49,6 +48,258 @@ const BASEMAPS = {
       },
     ],
   },
+}
+
+const ICMBIO_WMS_URL = 'https://geoservicos.inde.gov.br/geoserver/ICMBio/ows'
+const ICMBIO_WMS_PROXY_URL = '/icmbio-wms'
+const IBGE_WMS_URL = 'https://geoservicos.ibge.gov.br/geoserverIBGE/ows'
+const IBGE_WMS_PROXY_URL = '/ibge-wms'
+const ICMBIO_FEATURE_INFO_EVENT = 'icmbiofeatureinfo'
+
+const ICMBIO_UC_LEGEND = [
+  { label: 'Protecao Integral', color: '#b9f34a', borderColor: '#3d5b1c' },
+  { label: 'Uso Sustentavel', color: '#efb955', borderColor: '#6a4615' },
+]
+
+const ICMBIO_AREA_PRIORITY_LEGEND = [
+  { label: 'Alta', color: '#facc15', borderColor: '#7a5b00' },
+  { label: 'Muito Alta', color: '#f59e0b', borderColor: '#6b3f00' },
+  { label: 'Extremamente Alta', color: '#ef4444', borderColor: '#7f1d1d' },
+]
+
+const ICMBIO_EMBARGO_LEGEND = [
+  { label: 'Area embargada', color: '#1478ff', borderColor: '#62ff3f' },
+]
+
+const ICMBIO_WMS_SOURCE_LAYERS = [
+  {
+    key: 'uc-federal',
+    label: 'UCs Federais',
+    layers: 'limiteucsfederais_a',
+    title: 'Limites das Unidades de Conservacao Federais - ICMBio (Mar/2026)',
+    opacity: 0.72,
+    legend: ICMBIO_UC_LEGEND,
+  },
+  {
+    key: 'embargos',
+    label: 'Embargos',
+    layers: 'embargos_icmbio',
+    title: 'Areas embargadas - ICMBio',
+    opacity: 0.66,
+    legend: ICMBIO_EMBARGO_LEGEND,
+  },
+  {
+    key: 'caatinga',
+    label: 'Caatinga',
+    layers: 'caatinga_2a_atualizacao',
+    title: 'Areas Prioritarias para Conservacao da Biodiversidade - Caatinga',
+    opacity: 0.58,
+    legend: ICMBIO_AREA_PRIORITY_LEGEND,
+  },
+  {
+    key: 'cerrado-pantanal',
+    label: 'Cerrado/Pantanal',
+    layers: 'cerrado_pantanal_2a_atualizacao',
+    title: 'Areas Prioritarias para Conservacao da Biodiversidade - Cerrado e Pantanal',
+    opacity: 0.58,
+    legend: ICMBIO_AREA_PRIORITY_LEGEND,
+  },
+  {
+    key: 'mata-atlantica',
+    label: 'Mata Atlantica',
+    layers: 'mataatlantica_2a_atualiz',
+    title: 'Areas Prioritarias para Conservacao da Biodiversidade - Mata Atlantica',
+    opacity: 0.58,
+    legend: ICMBIO_AREA_PRIORITY_LEGEND,
+  },
+  {
+    key: 'amazonia',
+    label: 'Amazonia',
+    layers: 'amazonia_2a_atualizacao',
+    title: 'Areas Prioritarias para Conservacao da Biodiversidade - Amazonia',
+    opacity: 0.58,
+    legend: ICMBIO_AREA_PRIORITY_LEGEND,
+  },
+  {
+    key: 'zona-costeira',
+    label: 'Zona Costeira',
+    layers: 'zcm_2a_atualiz',
+    title: 'Areas Prioritarias para Conservacao da Biodiversidade - Zona Costeira e Marinha',
+    opacity: 0.58,
+    legend: ICMBIO_AREA_PRIORITY_LEGEND,
+  },
+]
+
+const IBGE_BIOMES_WMS_LAYER = {
+  key: 'biomas',
+  label: 'Biomas',
+  layers: 'CGMAT:qg_2025_240_bioma',
+  title: 'Biomas do Brasil - IBGE (2025)',
+  url: IBGE_WMS_URL,
+  proxyUrl: IBGE_WMS_PROXY_URL,
+  attribution: 'IBGE',
+  opacity: 0.52,
+  legend: [
+    { label: 'Amazonia', color: '#9aff00', borderColor: '#5a8f00' },
+    { label: 'Caatinga', color: '#fffdb2', borderColor: '#a89d53' },
+    { label: 'Cerrado', color: '#ffbda4', borderColor: '#b86f57' },
+    { label: 'Mata Atlantica', color: '#d9ffb7', borderColor: '#7ea65b' },
+    { label: 'Pampa', color: '#fff0d6', borderColor: '#b39467' },
+    { label: 'Pantanal', color: '#ffd8ff', borderColor: '#b87db8' },
+  ],
+}
+
+const ICMBIO_WMS_LAYERS = [
+  {
+    key: 'all',
+    label: 'Todas',
+    layers: ICMBIO_WMS_SOURCE_LAYERS.map((layer) => layer.layers).join(','),
+    title: 'UCs Federais, Embargos e Areas Prioritarias dos biomas brasileiros',
+    opacity: 0.7,
+    legend: [
+      ...ICMBIO_UC_LEGEND,
+      ...ICMBIO_EMBARGO_LEGEND,
+      ...ICMBIO_AREA_PRIORITY_LEGEND,
+    ],
+  },
+  ...ICMBIO_WMS_SOURCE_LAYERS,
+  IBGE_BIOMES_WMS_LAYER,
+]
+
+const ICMBIO_WMS_LAYER_MAP = new Map(
+  ICMBIO_WMS_LAYERS.map((layer) => [layer.key, layer])
+)
+
+const ICMBIO_QUERYABLE_LAYERS = [
+  ...ICMBIO_WMS_SOURCE_LAYERS,
+  IBGE_BIOMES_WMS_LAYER,
+]
+
+const ICMBIO_WMS_SOURCE_LAYER_MAP = new Map(
+  ICMBIO_QUERYABLE_LAYERS.flatMap((layer) => [
+    [layer.layers, layer],
+    [normalizeIcmbioLayerName(layer.layers), layer],
+  ])
+)
+
+const ICMBIO_FEATURE_INFO_FIELD_LIMIT = 12
+const ICMBIO_FEATURE_INFO_FEATURE_LIMIT = 6
+const ICMBIO_FEATURE_INFO_SKIP_KEYS = new Set([
+  'boundedby',
+  'bbox',
+  'geometry',
+  'geom',
+  'the_geom',
+  'shape',
+  'ogc_fid',
+])
+
+const ICMBIO_FEATURE_FIELD_LABELS = {
+  acao1: 'Acao 1',
+  acao2: 'Acao 2',
+  acao3: 'Acao 3',
+  acao4: 'Acao 4',
+  acao_2: 'Acao 2',
+  acao_3: 'Acao 3',
+  acao_prin: 'Acao principal',
+  acao_princ: 'Acao principal',
+  acaoprinc: 'Acao principal',
+  acaopriori: 'Acao prioritaria',
+  acprinc: 'Acao principal',
+  acprincnom: 'Acao principal',
+  ac2: 'Acao 2',
+  ac3: 'Acao 3',
+  ano: 'Ano',
+  area: 'Area',
+  area_ha: 'Area (ha)',
+  areahaalb: 'Area (ha)',
+  artigo_1: 'Artigo 1',
+  artigo_2: 'Artigo 2',
+  autuado: 'Autuado',
+  biomas: 'Biomas',
+  cnuc: 'CNUC',
+  cd_bioma: 'Codigo do bioma',
+  cd_recorte: 'Codigo do recorte',
+  cod_area: 'Codigo',
+  criacaoano: 'Ano de criacao',
+  criacaoato: 'Ato de criacao',
+  data: 'Data',
+  demarcacao: 'Demarcacao',
+  esferaadm: 'Esfera',
+  estados: 'Estados',
+  gregional: 'Regional',
+  grupouc: 'Grupo',
+  import_bio: 'Importancia biologica',
+  importbio_: 'Importancia biologica',
+  imp: 'Importancia biologica',
+  municipio: 'Municipio',
+  n: 'Numero',
+  nome: 'Nome',
+  nm_bioma: 'Bioma',
+  nomeacao: 'Acao recomendada',
+  nome_ap: 'Nome da area',
+  nome_area: 'Nome da area',
+  nome_uc: 'UC',
+  nomeuc: 'Unidade de Conservacao',
+  numero_ai: 'Auto de infracao',
+  numero_emb: 'Embargo',
+  obs: 'Observacao',
+  origem: 'Origem',
+  prior_acao: 'Prioridade de acao',
+  prioridade: 'Prioridade de acao',
+  prio: 'Prioridade de acao',
+  serie: 'Serie',
+  siglacateg: 'Categoria',
+  tipo_infra: 'Tipo da infracao',
+  uf: 'UF',
+  ufabrang: 'UF',
+  quadro: 'Quadro',
+}
+
+const ICMBIO_LAYER_FIELD_PRIORITY = {
+  limiteucsfederais_a: [
+    'nomeuc',
+    'cnuc',
+    'siglacateg',
+    'grupouc',
+    'ufabrang',
+    'biomas',
+    'criacaoano',
+    'criacaoato',
+    'areahaalb',
+    'demarcacao',
+  ],
+  embargos_icmbio: [
+    'numero_emb',
+    'numero_ai',
+    'autuado',
+    'tipo_infra',
+    'nome_uc',
+    'cnuc',
+    'municipio',
+    'uf',
+    'data',
+    'ano',
+    'area',
+  ],
+  cerrado_pantanal_2a_atualizacao: [
+    'nome',
+    'cod_area',
+    'import_bio',
+    'prior_acao',
+    'area_ha',
+    'estados',
+    'acao1',
+    'acao2',
+    'acao3',
+    'acao4',
+  ],
+  qg_2025_240_bioma: [
+    'nm_bioma',
+    'cd_bioma',
+    'cd_recorte',
+    'quadro',
+  ],
 }
 
 function MapInvalidateOnLayout({ revision }) {
@@ -119,6 +370,96 @@ function MapZoomTracker({ onZoomChange }) {
     map.on('zoomend', syncZoom)
     return () => map.off('zoomend', syncZoom)
   }, [map, onZoomChange])
+
+  return null
+}
+
+function IcmbioFeatureInfoHandler({ activeLayer }) {
+  const map = useMap()
+  const requestRef = useRef({
+    abortController: null,
+    id: 0,
+    popup: null,
+  })
+
+  useEffect(() => {
+    if (!activeLayer) return undefined
+
+    const handleFeatureInfoRequest = async (event) => {
+      const latlng = event?.latlng
+      if (!latlng) return
+
+      requestRef.current.id += 1
+      const requestId = requestRef.current.id
+
+      if (requestRef.current.abortController) {
+        requestRef.current.abortController.abort()
+      }
+
+      const abortController = new AbortController()
+      requestRef.current.abortController = abortController
+
+      if (requestRef.current.popup) {
+        requestRef.current.popup.remove()
+        requestRef.current.popup = null
+      }
+
+      const popup = L.popup(ICMBIO_FEATURE_INFO_POPUP_OPTIONS)
+        .setLatLng(latlng)
+        .setContent(icmbioFeatureInfoLoadingMarkup(activeLayer))
+        .openOn(map)
+
+      requestRef.current.popup = popup
+
+      try {
+        const response = await fetch(
+          buildIcmbioFeatureInfoUrl(map, latlng, activeLayer),
+          {
+            credentials: 'omit',
+            signal: abortController.signal,
+          }
+        )
+
+        if (!response.ok) {
+          throw new Error(`Consulta ICMBio retornou HTTP ${response.status}`)
+        }
+
+        const contentType = response.headers.get('content-type') || ''
+        if (!contentType.includes('application/json')) {
+          throw new Error('O ICMBio nao retornou JSON para este ponto.')
+        }
+
+        const featureCollection = await response.json()
+        if (requestRef.current.id !== requestId) return
+
+        popup.setContent(icmbioFeatureInfoPopupMarkup(activeLayer, featureCollection))
+        popup.update()
+      } catch (error) {
+        if (error?.name === 'AbortError' || requestRef.current.id !== requestId) {
+          return
+        }
+
+        popup.setContent(icmbioFeatureInfoErrorMarkup(activeLayer, error?.message))
+        popup.update()
+      }
+    }
+
+    map.on('click', handleFeatureInfoRequest)
+    map.on(ICMBIO_FEATURE_INFO_EVENT, handleFeatureInfoRequest)
+
+    return () => {
+      map.off('click', handleFeatureInfoRequest)
+      map.off(ICMBIO_FEATURE_INFO_EVENT, handleFeatureInfoRequest)
+      if (requestRef.current.abortController) {
+        requestRef.current.abortController.abort()
+        requestRef.current.abortController = null
+      }
+      if (requestRef.current.popup) {
+        requestRef.current.popup.remove()
+        requestRef.current.popup = null
+      }
+    }
+  }, [activeLayer, map])
 
   return null
 }
@@ -282,6 +623,16 @@ const CAR_SELECTION_POPUP_OPTIONS = {
   closeOnClick: true,
   autoPan: false,
 }
+
+const ICMBIO_FEATURE_INFO_POPUP_OPTIONS = {
+  className: 'custom-popup icmbio-feature-popup-shell',
+  maxWidth: 380,
+  autoClose: false,
+  closeOnClick: false,
+  autoPan: true,
+}
+const CAR_REFERENCE_RENDER_CHUNK_SIZE = 200
+const GLOBE_CAR_FEATURE_LIMIT = 1200
 
 // Small threshold to keep a simple click from entering the heavier drag path.
 const DRAG_START_THRESHOLD_PX = 3
@@ -596,6 +947,235 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+function isLocalhostRuntime() {
+  if (typeof window === 'undefined') return false
+  return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
+}
+
+function getIcmbioFeatureInfoBaseUrl(activeLayer) {
+  if (isLocalhostRuntime()) {
+    return activeLayer?.proxyUrl || ICMBIO_WMS_PROXY_URL
+  }
+
+  return activeLayer?.url || ICMBIO_WMS_URL
+}
+
+function buildIcmbioFeatureInfoUrl(map, latlng, activeLayer) {
+  const size = map.getSize()
+  const clickPoint = map.latLngToContainerPoint(latlng).round()
+  const bounds = map.getBounds()
+  const crs = map.options.crs || L.CRS.EPSG3857
+  const southWest = crs.project(bounds.getSouthWest())
+  const northEast = crs.project(bounds.getNorthEast())
+  const params = new URLSearchParams({
+    SERVICE: 'WMS',
+    VERSION: '1.3.0',
+    REQUEST: 'GetFeatureInfo',
+    FORMAT: 'image/png',
+    TRANSPARENT: 'true',
+    LAYERS: activeLayer.layers,
+    QUERY_LAYERS: activeLayer.layers,
+    STYLES: '',
+    INFO_FORMAT: 'application/json',
+    FEATURE_COUNT: String(ICMBIO_FEATURE_INFO_FEATURE_LIMIT),
+    CRS: 'EPSG:3857',
+    BBOX: [southWest.x, southWest.y, northEast.x, northEast.y].join(','),
+    WIDTH: String(Math.round(size.x)),
+    HEIGHT: String(Math.round(size.y)),
+    I: String(clickPoint.x),
+    J: String(clickPoint.y),
+  })
+
+  return `${getIcmbioFeatureInfoBaseUrl(activeLayer)}?${params.toString()}`
+}
+
+function normalizeIcmbioLayerName(value) {
+  return String(value || '').split(':').pop()
+}
+
+function getIcmbioFeatureLayerName(feature, activeLayer) {
+  const featureIdLayer = String(feature?.id || '').split('.')[0]
+  const normalizedFeatureIdLayer = normalizeIcmbioLayerName(featureIdLayer)
+
+  if (ICMBIO_WMS_SOURCE_LAYER_MAP.has(normalizedFeatureIdLayer)) {
+    return normalizedFeatureIdLayer
+  }
+
+  const [firstLayer] = String(activeLayer?.layers || '').split(',')
+  return normalizeIcmbioLayerName(firstLayer)
+}
+
+function getIcmbioFeatureLayer(feature, activeLayer) {
+  const layerName = getIcmbioFeatureLayerName(feature, activeLayer)
+  return ICMBIO_WMS_SOURCE_LAYER_MAP.get(layerName) || activeLayer
+}
+
+function hasIcmbioDisplayValue(value) {
+  if (value === null || value === undefined) return false
+  if (Array.isArray(value)) return value.length > 0
+  if (typeof value === 'object') return Object.keys(value).length > 0
+  return String(value).trim() !== ''
+}
+
+function formatIcmbioFeatureValue(value) {
+  if (!hasIcmbioDisplayValue(value)) return '-'
+
+  if (Array.isArray(value)) {
+    return value.map(formatIcmbioFeatureValue).join(', ')
+  }
+
+  if (typeof value === 'object') {
+    return JSON.stringify(value)
+  }
+
+  const text = String(value).trim()
+  const dateMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (dateMatch) {
+    return `${dateMatch[3]}/${dateMatch[2]}/${dateMatch[1]}`
+  }
+
+  return text
+}
+
+function getIcmbioFieldLabel(key) {
+  if (ICMBIO_FEATURE_FIELD_LABELS[key]) {
+    return ICMBIO_FEATURE_FIELD_LABELS[key]
+  }
+
+  return String(key)
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function getIcmbioFeatureDisplayFields(feature, activeLayer) {
+  const properties = feature?.properties || {}
+  const layerName = getIcmbioFeatureLayerName(feature, activeLayer)
+  const priorityFields = ICMBIO_LAYER_FIELD_PRIORITY[layerName] || []
+  const fieldKeys = [...priorityFields, ...Object.keys(properties)]
+  const seenKeys = new Set()
+  const fields = []
+
+  fieldKeys.forEach((key) => {
+    const normalizedKey = normalizePropertyKey(key)
+    if (seenKeys.has(key) || ICMBIO_FEATURE_INFO_SKIP_KEYS.has(normalizedKey)) return
+    seenKeys.add(key)
+
+    const value = properties[key]
+    if (!hasIcmbioDisplayValue(value)) return
+
+    fields.push({
+      key,
+      label: getIcmbioFieldLabel(key),
+      value: formatIcmbioFeatureValue(value),
+    })
+  })
+
+  return fields.slice(0, ICMBIO_FEATURE_INFO_FIELD_LIMIT)
+}
+
+function getIcmbioFeatureTitle(feature, activeLayer) {
+  const properties = feature?.properties || {}
+  return (
+    properties.nomeuc ||
+    properties.nome_uc ||
+    properties.nm_bioma ||
+    properties.nome ||
+    properties.numero_emb ||
+    properties.numero_ai ||
+    getIcmbioFeatureLayer(feature, activeLayer)?.label ||
+    'Registro ICMBio'
+  )
+}
+
+function icmbioFeatureInfoLoadingMarkup(activeLayer) {
+  return `
+    <div class="icmbio-feature-popup">
+      <div class="icmbio-feature-popup__top">
+        <span class="icmbio-feature-popup__eyebrow">ICMBio</span>
+        <strong>${escapeHtml(activeLayer?.label || 'Camada')}</strong>
+      </div>
+      <div class="icmbio-feature-popup__body">
+        <div class="icmbio-feature-popup__empty">Consultando dados no ponto clicado...</div>
+      </div>
+    </div>
+  `
+}
+
+function icmbioFeatureInfoErrorMarkup(activeLayer, message) {
+  return `
+    <div class="icmbio-feature-popup">
+      <div class="icmbio-feature-popup__top">
+        <span class="icmbio-feature-popup__eyebrow">ICMBio</span>
+        <strong>${escapeHtml(activeLayer?.label || 'Camada')}</strong>
+      </div>
+      <div class="icmbio-feature-popup__body">
+        <div class="icmbio-feature-popup__empty icmbio-feature-popup__empty--error">
+          ${escapeHtml(message || 'Nao foi possivel consultar os dados desta camada.')}
+        </div>
+      </div>
+    </div>
+  `
+}
+
+function icmbioFeatureInfoPopupMarkup(activeLayer, featureCollection) {
+  const features = Array.isArray(featureCollection?.features)
+    ? featureCollection.features
+    : []
+
+  if (!features.length) {
+    return `
+      <div class="icmbio-feature-popup">
+        <div class="icmbio-feature-popup__top">
+          <span class="icmbio-feature-popup__eyebrow">ICMBio</span>
+          <strong>${escapeHtml(activeLayer?.label || 'Camada')}</strong>
+        </div>
+        <div class="icmbio-feature-popup__body">
+          <div class="icmbio-feature-popup__empty">Nenhum registro ICMBio encontrado neste ponto.</div>
+        </div>
+      </div>
+    `
+  }
+
+  const featureCards = features.slice(0, ICMBIO_FEATURE_INFO_FEATURE_LIMIT).map((feature) => {
+    const sourceLayer = getIcmbioFeatureLayer(feature, activeLayer)
+    const fields = getIcmbioFeatureDisplayFields(feature, activeLayer)
+    const rows = fields.length
+      ? fields.map((field) => `
+          <div class="icmbio-feature-popup__row">
+            <span>${escapeHtml(field.label)}</span>
+            <strong>${escapeHtml(field.value)}</strong>
+          </div>
+        `).join('')
+      : '<div class="icmbio-feature-popup__empty">Registro sem atributos publicados.</div>'
+
+    return `
+      <section class="icmbio-feature-popup__card">
+        <div class="icmbio-feature-popup__card-head">
+          <span>${escapeHtml(sourceLayer?.label || 'ICMBio')}</span>
+          <strong>${escapeHtml(getIcmbioFeatureTitle(feature, activeLayer))}</strong>
+        </div>
+        <div class="icmbio-feature-popup__rows">
+          ${rows}
+        </div>
+      </section>
+    `
+  }).join('')
+
+  return `
+    <div class="icmbio-feature-popup">
+      <div class="icmbio-feature-popup__top">
+        <span class="icmbio-feature-popup__eyebrow">ICMBio</span>
+        <strong>${escapeHtml(features.length === 1 ? '1 registro encontrado' : `${features.length} registros encontrados`)}</strong>
+      </div>
+      <div class="icmbio-feature-popup__body">
+        ${featureCards}
+      </div>
+    </div>
+  `
 }
 
 function formatArea(area) {
@@ -1401,7 +1981,7 @@ function carReferenceStyle(feature, overlapIdSet, selectedLayerKey, matchedDatas
 
 function buildCarReferenceMapGeojson(datasets = []) {
   const features = datasets.flatMap((dataset, datasetIndex) => (
-    dedupeCarReferenceFeatures(dataset.geojson?.features || []).map((feature) => {
+    (dataset.geojson?.features || []).map((feature) => {
       const featureId = feature.properties?.id
 
       return {
@@ -1429,14 +2009,78 @@ function buildCarReferenceMapGeojson(datasets = []) {
   }
 }
 
-function datasetBounds(glebas) {
-  if (!glebas?.features?.length) return null
+function extendBoundsFromCoordinates(bounds, coordinates) {
+  if (!Array.isArray(coordinates)) return
 
-  try {
-    return L.geoJSON(glebas).getBounds()
-  } catch {
-    return null
+  if (
+    coordinates.length >= 2 &&
+    typeof coordinates[0] === 'number' &&
+    typeof coordinates[1] === 'number'
+  ) {
+    bounds.extend([coordinates[1], coordinates[0]])
+    return
   }
+
+  coordinates.forEach((childCoordinates) => {
+    extendBoundsFromCoordinates(bounds, childCoordinates)
+  })
+}
+
+function extendBoundsFromObject(bounds, boundsObject) {
+  if (!boundsObject) return false
+  const { minLon, minLat, maxLon, maxLat } = boundsObject
+
+  if (
+    !Number.isFinite(minLon) ||
+    !Number.isFinite(minLat) ||
+    !Number.isFinite(maxLon) ||
+    !Number.isFinite(maxLat)
+  ) {
+    return false
+  }
+
+  bounds.extend([minLat, minLon])
+  bounds.extend([maxLat, maxLon])
+  return true
+}
+
+function datasetBounds(geojson) {
+  if (!geojson?.features?.length) return null
+
+  const bounds = L.latLngBounds([])
+
+  geojson.features.forEach((feature) => {
+    if (extendBoundsFromObject(bounds, feature.properties?.__bounds)) return
+    extendBoundsFromCoordinates(bounds, feature.geometry?.coordinates)
+  })
+
+  return bounds.isValid() ? bounds : null
+}
+
+function featureBoundsFromGeojson(geojson, datasetId, featureId) {
+  if (!featureId || !geojson?.features?.length) return null
+
+  const feature = geojson.features.find((candidate) => {
+    const properties = candidate.properties || {}
+    const candidateLayerKey =
+      properties.__carLayerKey ||
+      getCarFeatureLayerKey(properties.__carDatasetId, properties.id)
+
+    return (
+      candidateLayerKey === getCarFeatureLayerKey(datasetId, featureId) ||
+      properties.id === featureId
+    )
+  })
+
+  if (!feature) return null
+
+  const bounds = L.latLngBounds([])
+  if (extendBoundsFromObject(bounds, feature.properties?.__bounds)) {
+    return bounds.isValid() ? bounds : null
+  }
+
+  extendBoundsFromCoordinates(bounds, feature.geometry?.coordinates)
+  return bounds.isValid() ? bounds : null
 }
 
 function featureSetBounds(featureIds, featureLayers) {
@@ -1674,6 +2318,7 @@ function CarReferenceLayer({
   const leafMap = useMap()
   const featureGroupRef = useRef(null)
   const featureLayersRef = useRef(new Map())
+  const canvasRendererRef = useRef(null)
   const selectorPopupRef = useRef(null)
   const lastDatasetKeyRef = useRef(null)
   const lastViewportRequestRef = useRef(null)
@@ -1739,6 +2384,12 @@ function CarReferenceLayer({
   }, [overlapIdSet, overlapLayerKeySet, selectedDatasetId, selectedLayerKey])
 
   useEffect(() => {
+    canvasRendererRef.current = L.canvas({
+      pane: 'car-reference',
+      padding: 0.5,
+      tolerance: 6,
+    })
+
     const featureGroup = L.featureGroup().addTo(leafMap)
     featureGroupRef.current = featureGroup
 
@@ -1746,6 +2397,7 @@ function CarReferenceLayer({
       closeSelectorPopup()
       featureGroup.remove()
       featureGroupRef.current = null
+      canvasRendererRef.current = null
       featureLayersRef.current.clear()
     }
   }, [closeSelectorPopup, leafMap])
@@ -1753,17 +2405,15 @@ function CarReferenceLayer({
   useEffect(() => {
     if (!featureGroupRef.current) return
 
-    const nextDatasetKey = JSON.stringify(
-      {
-        source: carDatasetKey,
-        features: carGeojson?.features?.map((feature) => ({
-          id: feature.properties?.id,
-          layerKey: feature.properties?.__carLayerKey,
-          datasetId: feature.properties?.__carDatasetId,
-          coordinates: feature.geometry,
-        })) || [],
-      }
-    )
+    const features = carGeojson?.features || []
+    const firstFeature = features[0]?.properties || {}
+    const lastFeature = features[features.length - 1]?.properties || {}
+    const nextDatasetKey = [
+      carDatasetKey || 'sem-base',
+      features.length,
+      firstFeature.__carLayerKey || firstFeature.id || '',
+      lastFeature.__carLayerKey || lastFeature.id || '',
+    ].join('|')
 
     if (lastDatasetKeyRef.current === nextDatasetKey) {
       return
@@ -1773,10 +2423,11 @@ function CarReferenceLayer({
     featureGroupRef.current.clearLayers()
     featureLayersRef.current.clear()
 
-    if (!carGeojson?.features?.length) return
+    if (!features.length) return
 
-    L.geoJSON(carGeojson, {
+    const carLayer = L.geoJSON(null, {
       pane: 'car-reference',
+      renderer: canvasRendererRef.current || undefined,
       style: (feature) => carReferenceStyle(
         feature,
         overlapIdSetRef.current,
@@ -1842,6 +2493,8 @@ function CarReferenceLayer({
               L.DomEvent.stop(event.originalEvent)
             }
 
+            leafMap.fire(ICMBIO_FEATURE_INFO_EVENT, { latlng: event.latlng })
+
             const candidates = collectCarReferenceCandidatesAtLatLng(
               event.latlng,
               featureLayersRef.current
@@ -1871,6 +2524,39 @@ function CarReferenceLayer({
         }
       },
     })
+
+    featureGroupRef.current.addLayer(carLayer)
+
+    let isCancelled = false
+    let frameId = null
+    let nextFeatureIndex = 0
+
+    const renderNextChunk = () => {
+      if (isCancelled) return
+
+      const chunkEnd = Math.min(
+        nextFeatureIndex + CAR_REFERENCE_RENDER_CHUNK_SIZE,
+        features.length
+      )
+
+      for (; nextFeatureIndex < chunkEnd; nextFeatureIndex += 1) {
+        carLayer.addData(features[nextFeatureIndex])
+      }
+
+      if (nextFeatureIndex < features.length) {
+        frameId = window.requestAnimationFrame(renderNextChunk)
+      }
+    }
+
+    frameId = window.requestAnimationFrame(renderNextChunk)
+
+    return () => {
+      isCancelled = true
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId)
+      }
+      carLayer.remove()
+    }
   }, [carDatasetKey, carGeojson, leafMap, openCarCandidateSelector, selectCarCandidate])
 
   useEffect(() => {
@@ -1899,7 +2585,9 @@ function CarReferenceLayer({
     if (viewportRequest.type === 'car-feature' && viewportRequest.featureId) {
       const layerKey = getCarFeatureLayerKey(viewportRequest.datasetKey, viewportRequest.featureId)
       const layer = featureLayersRef.current.get(layerKey) || featureLayersRef.current.get(viewportRequest.featureId)
-      const bounds = layer?.getBounds?.()
+      const bounds =
+        layer?.getBounds?.() ||
+        featureBoundsFromGeojson(carGeojson, viewportRequest.datasetKey, viewportRequest.featureId)
 
       if (bounds?.isValid()) {
         animateToBounds(leafMap, bounds, { maxZoom: 18, duration: 1.45, padding: [72, 72] })
@@ -2698,6 +3386,64 @@ function BasemapControl({ activeBasemap, onChange }) {
   )
 }
 
+function IcmbioLayerControl({ activeLayerKey, onChange }) {
+  const activeLayer = ICMBIO_WMS_LAYER_MAP.get(activeLayerKey) || null
+  const legendItems = activeLayer?.legend || []
+
+  return (
+    <div className="icmbio-layer-control" role="group" aria-label="Camadas ICMBio">
+      <div className="icmbio-layer-control__header">
+        <span className="icmbio-layer-control__dot" aria-hidden="true" />
+        <span className="icmbio-layer-control__title">ICMBio</span>
+        {activeLayer && (
+          <span className="icmbio-layer-control__mode">Tematico</span>
+        )}
+      </div>
+      <div className="icmbio-layer-control__actions">
+        <button
+          type="button"
+          className={`icmbio-layer-control__button ${activeLayerKey === null ? 'is-active' : ''}`}
+          onClick={() => onChange(null)}
+        >
+          Oculto
+        </button>
+        {ICMBIO_WMS_LAYERS.map((layer) => (
+          <button
+            key={layer.key}
+            type="button"
+            title={layer.title}
+            className={`icmbio-layer-control__button ${activeLayerKey === layer.key ? 'is-active' : ''}`}
+            onClick={() => onChange(layer.key)}
+          >
+            {layer.label}
+          </button>
+        ))}
+      </div>
+      {legendItems.length > 0 && (
+        <div className="icmbio-layer-control__legend">
+          <div className="icmbio-layer-control__legend-title">Legenda</div>
+          {legendItems.map((item, index) => (
+            <div
+              key={`${item.label}-${index}`}
+              className="icmbio-layer-control__legend-item"
+            >
+              <span
+                className="icmbio-layer-control__legend-swatch"
+                style={{
+                  background: item.color,
+                  borderColor: item.borderColor || item.color,
+                }}
+                aria-hidden="true"
+              />
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function getReferencePresentation(feature) {
   const properties = feature?.properties || {}
   const sourceType = String(
@@ -2767,6 +3513,7 @@ export default function MapView({
   const selectedId = selectedGleba?.properties?.id
   const [draggingFeatureId, setDraggingFeatureId] = useState(null)
   const [activeBasemap, setActiveBasemap] = useState('satellite')
+  const [activeIcmbioLayerKey, setActiveIcmbioLayerKey] = useState(null)
   const [satelliteSourceIndex, setSatelliteSourceIndex] = useState(0)
   const [requestedVertexActivation, setRequestedVertexActivation] = useState(null)
   const [mapZoom, setMapZoom] = useState(BRAZIL_ZOOM)
@@ -2788,9 +3535,16 @@ export default function MapView({
     () => buildCarReferenceMapGeojson(carReferenceDatasets),
     [carReferenceDatasets]
   )
+  const carReferenceFeatureCount = carReferenceMapGeojson.features?.length || 0
+  const shouldRenderGlobe =
+    isGlobeVisible && carReferenceFeatureCount <= GLOBE_CAR_FEATURE_LIMIT
   const carReferenceMapKey = useMemo(
     () => carReferenceDatasets.map((dataset) => dataset.datasetId).join('|'),
     [carReferenceDatasets]
+  )
+  const activeIcmbioLayer = useMemo(
+    () => ICMBIO_WMS_LAYER_MAP.get(activeIcmbioLayerKey) || null,
+    [activeIcmbioLayerKey]
   )
 
   const handlePointMarkerSelect = useCallback((feature, pointReference) => {
@@ -2837,6 +3591,15 @@ export default function MapView({
   const handleBasemapChange = useCallback((nextBasemap) => {
     setIsIntroActive(false)
     setActiveBasemap(nextBasemap)
+  }, [])
+
+  const handleIcmbioLayerChange = useCallback((nextLayerKey) => {
+    setActiveIcmbioLayerKey(nextLayerKey)
+
+    if (nextLayerKey) {
+      setIsIntroActive(false)
+      setIsStartupGlobePinned(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -2891,10 +3654,14 @@ export default function MapView({
   }, [onSelectCarReferenceFeature])
 
   return (
-    <div className={`map-wrapper${isGlobeVisible ? ' map-wrapper--globe' : ''}${isIntroActive ? ' map-wrapper--intro' : ''}`}>
+    <div className={`map-wrapper${shouldRenderGlobe ? ' map-wrapper--globe' : ''}${isIntroActive && shouldRenderGlobe ? ' map-wrapper--intro' : ''}${activeIcmbioLayer ? ' map-wrapper--icmbio' : ''}`}>
       <BasemapControl
         activeBasemap={activeBasemap}
         onChange={handleBasemapChange}
+      />
+      <IcmbioLayerControl
+        activeLayerKey={activeIcmbioLayerKey}
+        onChange={handleIcmbioLayerChange}
       />
 
       <MapContainer
@@ -2908,6 +3675,8 @@ export default function MapView({
         <MapInvalidateOnLayout revision={layoutRevision} />
         <MapInvalidateOnContainerResize />
         <MapZoomTracker onZoomChange={setMapZoom} />
+        <IcmbioFeatureInfoHandler activeLayer={activeIcmbioLayer} />
+        <Pane name="icmbio-wms" style={{ zIndex: 345 }} />
         <Pane name="car-reference" style={{ zIndex: 360 }} />
         <Pane name="gleba-layer" style={{ zIndex: 460 }} />
         <Pane name="gleba-points" style={{ zIndex: 620 }} />
@@ -2934,6 +3703,23 @@ export default function MapView({
             maxZoom={BASEMAPS.satellite.labels.maxZoom}
             pane="overlayPane"
             opacity={0.95}
+          />
+        )}
+
+        {activeIcmbioLayer && (
+          <WMSTileLayer
+            key={activeIcmbioLayer.key}
+            url={activeIcmbioLayer.url || ICMBIO_WMS_URL}
+            layers={activeIcmbioLayer.layers}
+            styles=""
+            format="image/png"
+            transparent={true}
+            version="1.3.0"
+            opacity={activeIcmbioLayer.opacity}
+            className="icmbio-wms-tiles"
+            pane="icmbio-wms"
+            maxZoom={20}
+            attribution={activeIcmbioLayer.attribution || 'ICMBio / INDE'}
           />
         )}
 
@@ -2986,7 +3772,7 @@ export default function MapView({
         <Legend />
       </MapContainer>
 
-      {isGlobeVisible && (
+      {shouldRenderGlobe && (
         <Suspense fallback={<div className="globe-view globe-view--loading">Carregando visualizacao global...</div>}>
           <GlobeView
             glebas={glebas}

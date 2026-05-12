@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { dedupeCarReferenceFeatures } from '../services/carReferenceFeatureService'
 
+const CAR_FEATURE_LIST_PREVIEW_LIMIT = 250
+
 function IconFileSelect() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -63,8 +65,11 @@ function formatCoordinate(value) {
   return Number.isFinite(value) ? value.toFixed(6) : '-'
 }
 
-function formatCarDatasetCount(value) {
-  return `${value || 0} imovel(is)`
+function formatCarDatasetCount(value, metadata = null) {
+  const sourceType = String(metadata?.sourceType || '').toLowerCase()
+  const isKml = sourceType.includes('kml') || sourceType.includes('kmz')
+
+  return `${value || 0} ${isKml ? 'area(s)' : 'imovel(is)'}`
 }
 
 function formatCarFeatureArea(value) {
@@ -248,6 +253,8 @@ function CarDatasetList({
           {datasets.map((dataset, datasetIndex) => {
             const isActive = dataset.datasetId === activeDatasetId
             const features = dedupeCarReferenceFeatures(dataset.geojson?.features || [])
+            const visibleFeatures = features.slice(0, CAR_FEATURE_LIST_PREVIEW_LIMIT)
+            const hiddenFeatureCount = Math.max(0, features.length - visibleFeatures.length)
             const datasetContainment = getContainmentSummary(dataset.metadata?.kmlContainment)
 
             return (
@@ -272,7 +279,7 @@ function CarDatasetList({
 
                     <div className="coord-car-card__meta">
                       <span>{dataset.metadata.sourceType || 'KML/KMZ CAR'}</span>
-                      <span>{formatCarDatasetCount(features.length || dataset.metadata.glebaCount)}</span>
+                      <span>{formatCarDatasetCount(features.length || dataset.metadata.glebaCount, dataset.metadata)}</span>
                     </div>
 
                     {datasetContainment && (
@@ -295,7 +302,7 @@ function CarDatasetList({
 
                 {features.length > 0 && (
                   <div className="coord-car-feature-list" aria-label="Imoveis CAR desta base">
-                    {features.map((feature, index) => {
+                    {visibleFeatures.map((feature, index) => {
                       const featureId = feature.properties?.id
                       const isSelected = Boolean(isActive && featureId && featureId === selectedFeatureId)
                       const featureContainment = getContainmentSummary(feature.properties?.kmlContainment)
@@ -330,6 +337,12 @@ function CarDatasetList({
                         </button>
                       )
                     })}
+
+                    {hiddenFeatureCount > 0 && (
+                      <div className="coord-car-feature-list__overflow">
+                        Exibindo {visibleFeatures.length} de {features.length} areas. As demais continuam visiveis e selecionaveis diretamente no mapa.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -601,7 +614,8 @@ export default function CoordinateValidationPanel({
           <span>
             {formatCarDatasetCount(
               dedupeCarReferenceFeatures(carReferenceDataset.geojson?.features || []).length ||
-              carReferenceDataset.metadata.glebaCount
+              carReferenceDataset.metadata.glebaCount,
+              carReferenceDataset.metadata
             )}
           </span>
         </div>

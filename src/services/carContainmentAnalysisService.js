@@ -1,4 +1,5 @@
 const TOLERANCE = 1e-10
+const CONTAINMENT_ANALYSIS_FEATURE_LIMIT = 2500
 
 function nearlyEqual(left, right, tolerance = TOLERANCE) {
   return Math.abs(left - right) <= tolerance
@@ -45,6 +46,38 @@ function collectGeometrySamplePoints(geometry) {
   return geometryToPolygons(geometry).flatMap((polygon) => {
     return normalizeRing(polygon?.[0] || [])
   })
+}
+
+function calculateGeometryBounds(geometry) {
+  const points = collectGeometrySamplePoints(geometry)
+
+  if (!points.length) return null
+
+  return points.reduce(
+    (bounds, [lon, lat]) => ({
+      minLon: Math.min(bounds.minLon, lon),
+      minLat: Math.min(bounds.minLat, lat),
+      maxLon: Math.max(bounds.maxLon, lon),
+      maxLat: Math.max(bounds.maxLat, lat),
+    }),
+    {
+      minLon: Infinity,
+      minLat: Infinity,
+      maxLon: -Infinity,
+      maxLat: -Infinity,
+    }
+  )
+}
+
+function boundsContain(containerBounds, innerBounds, tolerance = TOLERANCE) {
+  if (!containerBounds || !innerBounds) return false
+
+  return (
+    containerBounds.minLon - tolerance <= innerBounds.minLon &&
+    containerBounds.maxLon + tolerance >= innerBounds.maxLon &&
+    containerBounds.minLat - tolerance <= innerBounds.minLat &&
+    containerBounds.maxLat + tolerance >= innerBounds.maxLat
+  )
 }
 
 function crossProduct(origin, left, right) {
@@ -177,37 +210,62 @@ function summarizeDatasetContainment(features = []) {
 }
 
 export function analyzeCarReferenceContainment(datasets = []) {
-  const features = datasets.flatMap((dataset) =>
-    (dataset.geojson?.features || []).map((feature) => ({
+  const totalFeatures = datasets.reduce(
+    (total, dataset) => total + (dataset.geojson?.features?.length || 0),
+    0
+  )
+
+  if (datasets.length < 2 || totalFeatures > CONTAINMENT_ANALYSIS_FEATURE_LIMIT) {
+    return datasets
+  }
+
+  const datasetEntries = datasets.map((dataset) => ({
+    dataset,
+    features: (dataset.geojson?.features || []).map((feature) => ({
       dataset,
       feature,
       featureId: feature.properties?.id || null,
+      bounds: calculateGeometryBounds(feature.geometry),
       analysis: buildEmptyFeatureAnalysis(),
-    }))
-  )
+    })),
+  }))
 
-  for (let leftIndex = 0; leftIndex < features.length; leftIndex += 1) {
-    for (let rightIndex = 0; rightIndex < features.length; rightIndex += 1) {
-      if (leftIndex === rightIndex) continue
+  datasetEntries.forEach((innerDatasetEntry) => {
+    datasetEntries.forEach((containerDatasetEntry) => {
+      if (innerDatasetEntry.dataset.datasetId === containerDatasetEntry.dataset.datasetId) {
+        return
+      }
 
-      const inner = features[leftIndex]
-      const container = features[rightIndex]
+      innerDatasetEntry.features.forEach((inner) => {
+        if (!inner.featureId) return
 
-      if (!inner.featureId || !container.featureId) continue
-      if (inner.dataset.datasetId === container.dataset.datasetId) continue
-      if (!geometryContainsGeometry(container.feature.geometry, inner.feature.geometry)) continue
+        containerDatasetEntry.features.forEach((container) => {
+          if (!container.featureId) return
+          if (!boundsContain(container.bounds, inner.bounds)) return
+          if (!geometryContainsGeometry(container.feature.geometry, inner.feature.geometry)) return
 
-      addUniqueRelation(inner.analysis.inside, buildRelation(container.dataset, container.feature))
-      addUniqueRelation(container.analysis.contains, buildRelation(inner.dataset, inner.feature))
-    }
-  }
+          addUniqueRelation(inner.analysis.inside, buildRelation(container.dataset, container.feature))
+          addUniqueRelation(container.analysis.contains, buildRelation(inner.dataset, inner.feature))
+        })
+      })
+    })
+  })
+
+  const analysesByDatasetAndFeature = new Map()
+  datasetEntries.forEach(({ dataset, features }) => {
+    features.forEach((entry) => {
+      analysesByDatasetAndFeature.set(
+        `${dataset.datasetId}::${entry.featureId}`,
+        entry.analysis
+      )
+    })
+  })
 
   return datasets.map((dataset) => {
     const nextFeatures = (dataset.geojson?.features || []).map((feature) => {
-      const featureAnalysis = features.find((candidate) =>
-        candidate.dataset.datasetId === dataset.datasetId &&
-        candidate.featureId === feature.properties?.id
-      )?.analysis || buildEmptyFeatureAnalysis()
+      const featureAnalysis =
+        analysesByDatasetAndFeature.get(`${dataset.datasetId}::${feature.properties?.id || null}`) ||
+        buildEmptyFeatureAnalysis()
 
       return {
         ...feature,
