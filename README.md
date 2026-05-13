@@ -127,6 +127,13 @@ npm run preview
 
 - O relatorio final e gerado em Excel por `src/services/reportService.js`
 
+### 7. Validação do Geoespaciais ICMBio
+
+#### Documentação: 
+- Link 1: (https://www.gov.br/icmbio/pt-br/assuntos/dados_geoespaciais)
+
+- Link 2: https://www.gov.br/icmbio/pt-br/assuntos/dados_geoespaciais/mapa-tematico-e-dados-geoestatisticos-das-unidades-de-conservacao-federais
+
 ## Estrutura principal
 
 ```text

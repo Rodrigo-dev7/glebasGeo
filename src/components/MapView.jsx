@@ -130,6 +130,21 @@ const ICMBIO_WMS_SOURCE_LAYERS = [
   },
 ]
 
+const ICMBIO_NORTHEAST_PRIORITY_LAYER = {
+  key: 'prioridades-nordeste',
+  label: 'Prioridades NE',
+  layers: [
+    'caatinga_2a_atualizacao',
+    'mataatlantica_2a_atualiz',
+    'cerrado_pantanal_2a_atualizacao',
+    'amazonia_2a_atualizacao',
+    'zcm_2a_atualiz',
+  ].join(','),
+  title: 'Areas Prioritarias para Conservacao da Biodiversidade - Nordeste',
+  opacity: 0.62,
+  legend: ICMBIO_AREA_PRIORITY_LEGEND,
+}
+
 const IBGE_BIOMES_WMS_LAYER = {
   key: 'biomas',
   label: 'Biomas',
@@ -162,6 +177,7 @@ const ICMBIO_WMS_LAYERS = [
       ...ICMBIO_AREA_PRIORITY_LEGEND,
     ],
   },
+  ICMBIO_NORTHEAST_PRIORITY_LAYER,
   ...ICMBIO_WMS_SOURCE_LAYERS,
   IBGE_BIOMES_WMS_LAYER,
 ]
@@ -229,6 +245,7 @@ const ICMBIO_FEATURE_FIELD_LABELS = {
   estados: 'Estados',
   gregional: 'Regional',
   grupouc: 'Grupo',
+  id_ap: 'Codigo',
   import_bio: 'Importancia biologica',
   importbio_: 'Importancia biologica',
   imp: 'Importancia biologica',
@@ -282,6 +299,24 @@ const ICMBIO_LAYER_FIELD_PRIORITY = {
     'ano',
     'area',
   ],
+  amazonia_2a_atualizacao: [
+    'nome_area',
+    'cod_area',
+    'import_bio',
+    'prior_acao',
+    'area_ha',
+    'acao_prin',
+    'acao_2',
+    'acao_3',
+  ],
+  caatinga_2a_atualizacao: [
+    'nome_area',
+    'cod_area',
+    'import_bio',
+    'prior_acao',
+    'acao_princ',
+    'area_ha',
+  ],
   cerrado_pantanal_2a_atualizacao: [
     'nome',
     'cod_area',
@@ -293,6 +328,23 @@ const ICMBIO_LAYER_FIELD_PRIORITY = {
     'acao2',
     'acao3',
     'acao4',
+  ],
+  mataatlantica_2a_atualiz: [
+    'cod_area',
+    'importbio_',
+    'prioridade',
+    'acaopriori',
+    'nomeacao',
+  ],
+  zcm_2a_atualiz: [
+    'nome_ap',
+    'id_ap',
+    'imp',
+    'prio',
+    'acaoprinc',
+    'acao2',
+    'acao3',
+    'n',
   ],
   qg_2025_240_bioma: [
     'nm_bioma',
@@ -1083,7 +1135,11 @@ function getIcmbioFeatureTitle(feature, activeLayer) {
     properties.nomeuc ||
     properties.nome_uc ||
     properties.nm_bioma ||
+    properties.nome_area ||
+    properties.nome_ap ||
     properties.nome ||
+    properties.cod_area ||
+    properties.id_ap ||
     properties.numero_emb ||
     properties.numero_ai ||
     getIcmbioFeatureLayer(feature, activeLayer)?.label ||
@@ -3386,59 +3442,77 @@ function BasemapControl({ activeBasemap, onChange }) {
   )
 }
 
-function IcmbioLayerControl({ activeLayerKey, onChange }) {
+function IcmbioLayerControl({ activeLayerKey, isCollapsed, onChange, onToggleCollapsed }) {
   const activeLayer = ICMBIO_WMS_LAYER_MAP.get(activeLayerKey) || null
   const legendItems = activeLayer?.legend || []
 
   return (
-    <div className="icmbio-layer-control" role="group" aria-label="Camadas ICMBio">
+    <div className={`icmbio-layer-control${isCollapsed ? ' is-collapsed' : ''}`} role="group" aria-label="Camadas ICMBio">
       <div className="icmbio-layer-control__header">
         <span className="icmbio-layer-control__dot" aria-hidden="true" />
-        <span className="icmbio-layer-control__title">ICMBio</span>
+        <span className="icmbio-layer-control__title">
+          {isCollapsed && activeLayer ? activeLayer.label : 'ICMBio'}
+        </span>
         {activeLayer && (
           <span className="icmbio-layer-control__mode">Tematico</span>
         )}
-      </div>
-      <div className="icmbio-layer-control__actions">
         <button
           type="button"
-          className={`icmbio-layer-control__button ${activeLayerKey === null ? 'is-active' : ''}`}
-          onClick={() => onChange(null)}
+          className="icmbio-layer-control__toggle"
+          aria-expanded={!isCollapsed}
+          aria-label={isCollapsed ? 'Expandir camadas ICMBio' : 'Esconder camadas ICMBio'}
+          title={isCollapsed ? 'Expandir camadas ICMBio' : 'Esconder camadas ICMBio'}
+          onClick={onToggleCollapsed}
         >
-          Oculto
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
         </button>
-        {ICMBIO_WMS_LAYERS.map((layer) => (
-          <button
-            key={layer.key}
-            type="button"
-            title={layer.title}
-            className={`icmbio-layer-control__button ${activeLayerKey === layer.key ? 'is-active' : ''}`}
-            onClick={() => onChange(layer.key)}
-          >
-            {layer.label}
-          </button>
-        ))}
       </div>
-      {legendItems.length > 0 && (
-        <div className="icmbio-layer-control__legend">
-          <div className="icmbio-layer-control__legend-title">Legenda</div>
-          {legendItems.map((item, index) => (
-            <div
-              key={`${item.label}-${index}`}
-              className="icmbio-layer-control__legend-item"
+      {!isCollapsed && (
+        <>
+          <div className="icmbio-layer-control__actions">
+            <button
+              type="button"
+              className={`icmbio-layer-control__button ${activeLayerKey === null ? 'is-active' : ''}`}
+              onClick={() => onChange(null)}
             >
-              <span
-                className="icmbio-layer-control__legend-swatch"
-                style={{
-                  background: item.color,
-                  borderColor: item.borderColor || item.color,
-                }}
-                aria-hidden="true"
-              />
-              <span>{item.label}</span>
+              Oculto
+            </button>
+            {ICMBIO_WMS_LAYERS.map((layer) => (
+              <button
+                key={layer.key}
+                type="button"
+                title={layer.title}
+                className={`icmbio-layer-control__button ${activeLayerKey === layer.key ? 'is-active' : ''}`}
+                onClick={() => onChange(layer.key)}
+              >
+                {layer.label}
+              </button>
+            ))}
+          </div>
+          {legendItems.length > 0 && (
+            <div className="icmbio-layer-control__legend">
+              <div className="icmbio-layer-control__legend-title">Legenda</div>
+              {legendItems.map((item, index) => (
+                <div
+                  key={`${item.label}-${index}`}
+                  className="icmbio-layer-control__legend-item"
+                >
+                  <span
+                    className="icmbio-layer-control__legend-swatch"
+                    style={{
+                      background: item.color,
+                      borderColor: item.borderColor || item.color,
+                    }}
+                    aria-hidden="true"
+                  />
+                  <span>{item.label}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   )
@@ -3514,6 +3588,7 @@ export default function MapView({
   const [draggingFeatureId, setDraggingFeatureId] = useState(null)
   const [activeBasemap, setActiveBasemap] = useState('satellite')
   const [activeIcmbioLayerKey, setActiveIcmbioLayerKey] = useState(null)
+  const [isIcmbioControlCollapsed, setIsIcmbioControlCollapsed] = useState(false)
   const [satelliteSourceIndex, setSatelliteSourceIndex] = useState(0)
   const [requestedVertexActivation, setRequestedVertexActivation] = useState(null)
   const [mapZoom, setMapZoom] = useState(BRAZIL_ZOOM)
@@ -3602,6 +3677,10 @@ export default function MapView({
     }
   }, [])
 
+  const handleIcmbioControlToggle = useCallback(() => {
+    setIsIcmbioControlCollapsed((current) => !current)
+  }, [])
+
   useEffect(() => {
     if (selectedGleba?.properties?.id) {
       return
@@ -3654,14 +3733,16 @@ export default function MapView({
   }, [onSelectCarReferenceFeature])
 
   return (
-    <div className={`map-wrapper${shouldRenderGlobe ? ' map-wrapper--globe' : ''}${isIntroActive && shouldRenderGlobe ? ' map-wrapper--intro' : ''}${activeIcmbioLayer ? ' map-wrapper--icmbio' : ''}`}>
+    <div className={`map-wrapper${shouldRenderGlobe ? ' map-wrapper--globe' : ''}${isIntroActive && shouldRenderGlobe ? ' map-wrapper--intro' : ''}${activeIcmbioLayer ? ' map-wrapper--icmbio' : ''}${isIcmbioControlCollapsed ? '' : ' map-wrapper--icmbio-control-expanded'}`}>
       <BasemapControl
         activeBasemap={activeBasemap}
         onChange={handleBasemapChange}
       />
       <IcmbioLayerControl
         activeLayerKey={activeIcmbioLayerKey}
+        isCollapsed={isIcmbioControlCollapsed}
         onChange={handleIcmbioLayerChange}
+        onToggleCollapsed={handleIcmbioControlToggle}
       />
 
       <MapContainer
