@@ -3588,7 +3588,7 @@ export default function MapView({
   const [draggingFeatureId, setDraggingFeatureId] = useState(null)
   const [activeBasemap, setActiveBasemap] = useState('satellite')
   const [activeIcmbioLayerKey, setActiveIcmbioLayerKey] = useState(null)
-  const [isIcmbioControlCollapsed, setIsIcmbioControlCollapsed] = useState(false)
+  const [isIcmbioControlCollapsed, setIsIcmbioControlCollapsed] = useState(true)
   const [satelliteSourceIndex, setSatelliteSourceIndex] = useState(0)
   const [requestedVertexActivation, setRequestedVertexActivation] = useState(null)
   const [mapZoom, setMapZoom] = useState(BRAZIL_ZOOM)
