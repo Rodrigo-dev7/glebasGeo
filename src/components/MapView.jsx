@@ -186,6 +186,28 @@ const ICMBIO_WMS_LAYER_MAP = new Map(
   ICMBIO_WMS_LAYERS.map((layer) => [layer.key, layer])
 )
 
+const ICMBIO_LAYER_CONTROL_GROUPS = [
+  {
+    title: 'ANALISE',
+    items: [
+      { layerKey: 'embargos', label: 'Embargos ICMBio', swatch: '#dc2626' },
+      { layerKey: 'uc-federal', label: 'Unid. Conservacao', swatch: '#2f6f5e' },
+      { layerKey: 'prioridades-nordeste', label: '\u00c1reas Priorit\u00e1rias NE', swatch: '#d99a31' },
+      { layerKey: 'biomas', label: 'Bioma', swatch: '#315d86' },
+    ],
+  },
+  {
+    title: 'EXIBICAO',
+    items: [
+      { layerKey: 'caatinga', label: 'Caatinga', swatch: '#facc15' },
+      { layerKey: 'cerrado-pantanal', label: 'Cerrado/Pantanal', swatch: '#f59e0b' },
+      { layerKey: 'mata-atlantica', label: 'Mata Atlantica', swatch: '#22c55e' },
+      { layerKey: 'amazonia', label: 'Amazonia', swatch: '#16a34a' },
+      { layerKey: 'zona-costeira', label: 'Zona Costeira', swatch: '#38bdf8' },
+    ],
+  },
+]
+
 const ICMBIO_QUERYABLE_LAYERS = [
   ...ICMBIO_WMS_SOURCE_LAYERS,
   IBGE_BIOMES_WMS_LAYER,
@@ -3442,19 +3464,50 @@ function BasemapControl({ activeBasemap, onChange }) {
   )
 }
 
-function IcmbioLayerControl({ activeLayerKey, isCollapsed, onChange, onToggleCollapsed }) {
-  const activeLayer = ICMBIO_WMS_LAYER_MAP.get(activeLayerKey) || null
-  const legendItems = activeLayer?.legend || []
+function IconLayerStack() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m12 3 8 4-8 4-8-4 8-4Z" />
+      <path d="m4 12 8 4 8-4" />
+      <path d="m4 17 8 4 8-4" />
+    </svg>
+  )
+}
+
+function IcmbioLayerControl({ activeLayerKeys = [], isCollapsed, onChange, onToggleCollapsed }) {
+  const activeLayerKeySet = useMemo(
+    () => new Set(activeLayerKeys),
+    [activeLayerKeys]
+  )
+  const activeLayers = useMemo(
+    () => activeLayerKeys.map((layerKey) => ICMBIO_WMS_LAYER_MAP.get(layerKey)).filter(Boolean),
+    [activeLayerKeys]
+  )
+  const legendItems = useMemo(() => {
+    const seen = new Set()
+
+    return activeLayers.flatMap((layer) => layer.legend || []).filter((item) => {
+      const key = `${item.label}-${item.color}-${item.borderColor || ''}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [activeLayers])
+  const activeLayerCount = activeLayers.length
 
   return (
     <div className={`icmbio-layer-control${isCollapsed ? ' is-collapsed' : ''}`} role="group" aria-label="Camadas ICMBio">
       <div className="icmbio-layer-control__header">
-        <span className="icmbio-layer-control__dot" aria-hidden="true" />
-        <span className="icmbio-layer-control__title">
-          {isCollapsed && activeLayer ? activeLayer.label : 'ICMBio'}
+        <span className="icmbio-layer-control__stack-icon" aria-hidden="true">
+          <IconLayerStack />
         </span>
-        {activeLayer && (
-          <span className="icmbio-layer-control__mode">Tematico</span>
+        <span className="icmbio-layer-control__title" title={'An\u00e1lise Territorial'}>
+          {'An\u00e1lise Territorial'}
+        </span>
+        {activeLayerCount > 0 && (
+          <span className="icmbio-layer-control__mode">
+            {activeLayerCount}
+          </span>
         )}
         <button
           type="button"
@@ -3470,27 +3523,52 @@ function IcmbioLayerControl({ activeLayerKey, isCollapsed, onChange, onToggleCol
         </button>
       </div>
       {!isCollapsed && (
-        <>
-          <div className="icmbio-layer-control__actions">
+        <div className="icmbio-layer-control__content">
+          {ICMBIO_LAYER_CONTROL_GROUPS.map((group) => (
+            <section key={group.title} className="icmbio-layer-control__section">
+              <div className="icmbio-layer-control__section-title">{group.title}</div>
+              <div className="icmbio-layer-control__switch-list">
+                {group.items.map((item) => {
+                  const layer = ICMBIO_WMS_LAYER_MAP.get(item.layerKey)
+                  if (!layer) return null
+
+                  const isActive = activeLayerKeySet.has(item.layerKey)
+
+                  return (
+                    <button
+                      key={item.layerKey}
+                      type="button"
+                      title={layer.title}
+                      className={`icmbio-layer-control__switch-row${isActive ? ' is-active' : ''}`}
+                      aria-pressed={isActive}
+                      onClick={() => onChange(item.layerKey)}
+                    >
+                      <span className="icmbio-layer-control__switch-label">
+                        <span
+                          className="icmbio-layer-control__swatch"
+                          style={{ background: item.swatch }}
+                          aria-hidden="true"
+                        />
+                        <span>{item.label}</span>
+                      </span>
+                      <span className="icmbio-layer-control__switch" aria-hidden="true">
+                        <span className="icmbio-layer-control__switch-thumb" />
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+          ))}
+          {activeLayerCount > 0 && (
             <button
               type="button"
-              className={`icmbio-layer-control__button ${activeLayerKey === null ? 'is-active' : ''}`}
+              className="icmbio-layer-control__clear"
               onClick={() => onChange(null)}
             >
-              Oculto
+              Limpar camadas
             </button>
-            {ICMBIO_WMS_LAYERS.map((layer) => (
-              <button
-                key={layer.key}
-                type="button"
-                title={layer.title}
-                className={`icmbio-layer-control__button ${activeLayerKey === layer.key ? 'is-active' : ''}`}
-                onClick={() => onChange(layer.key)}
-              >
-                {layer.label}
-              </button>
-            ))}
-          </div>
+          )}
           {legendItems.length > 0 && (
             <div className="icmbio-layer-control__legend">
               <div className="icmbio-layer-control__legend-title">Legenda</div>
@@ -3512,7 +3590,7 @@ function IcmbioLayerControl({ activeLayerKey, isCollapsed, onChange, onToggleCol
               ))}
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   )
@@ -3587,7 +3665,7 @@ export default function MapView({
   const selectedId = selectedGleba?.properties?.id
   const [draggingFeatureId, setDraggingFeatureId] = useState(null)
   const [activeBasemap, setActiveBasemap] = useState('satellite')
-  const [activeIcmbioLayerKey, setActiveIcmbioLayerKey] = useState(null)
+  const [activeIcmbioLayerKeys, setActiveIcmbioLayerKeys] = useState([])
   const [isIcmbioControlCollapsed, setIsIcmbioControlCollapsed] = useState(true)
   const [satelliteSourceIndex, setSatelliteSourceIndex] = useState(0)
   const [requestedVertexActivation, setRequestedVertexActivation] = useState(null)
@@ -3617,10 +3695,15 @@ export default function MapView({
     () => carReferenceDatasets.map((dataset) => dataset.datasetId).join('|'),
     [carReferenceDatasets]
   )
-  const activeIcmbioLayer = useMemo(
-    () => ICMBIO_WMS_LAYER_MAP.get(activeIcmbioLayerKey) || null,
-    [activeIcmbioLayerKey]
+  const activeIcmbioLayers = useMemo(
+    () => activeIcmbioLayerKeys.map((layerKey) => ICMBIO_WMS_LAYER_MAP.get(layerKey)).filter(Boolean),
+    [activeIcmbioLayerKeys]
   )
+  const activeIcmbioFeatureInfoLayer = useMemo(
+    () => activeIcmbioLayers[activeIcmbioLayers.length - 1] || null,
+    [activeIcmbioLayers]
+  )
+  const hasActiveIcmbioLayer = activeIcmbioLayers.length > 0
 
   const handlePointMarkerSelect = useCallback((feature, pointReference) => {
     setSelectedGleba(feature)
@@ -3669,7 +3752,16 @@ export default function MapView({
   }, [])
 
   const handleIcmbioLayerChange = useCallback((nextLayerKey) => {
-    setActiveIcmbioLayerKey(nextLayerKey)
+    if (!nextLayerKey) {
+      setActiveIcmbioLayerKeys([])
+      return
+    }
+
+    setActiveIcmbioLayerKeys((currentLayerKeys) => (
+      currentLayerKeys.includes(nextLayerKey)
+        ? currentLayerKeys.filter((layerKey) => layerKey !== nextLayerKey)
+        : [...currentLayerKeys, nextLayerKey]
+    ))
 
     if (nextLayerKey) {
       setIsIntroActive(false)
@@ -3733,13 +3825,13 @@ export default function MapView({
   }, [onSelectCarReferenceFeature])
 
   return (
-    <div className={`map-wrapper${shouldRenderGlobe ? ' map-wrapper--globe' : ''}${isIntroActive && shouldRenderGlobe ? ' map-wrapper--intro' : ''}${activeIcmbioLayer ? ' map-wrapper--icmbio' : ''}${isIcmbioControlCollapsed ? '' : ' map-wrapper--icmbio-control-expanded'}`}>
+    <div className={`map-wrapper${shouldRenderGlobe ? ' map-wrapper--globe' : ''}${isIntroActive && shouldRenderGlobe ? ' map-wrapper--intro' : ''}${hasActiveIcmbioLayer ? ' map-wrapper--icmbio' : ''}${isIcmbioControlCollapsed ? '' : ' map-wrapper--icmbio-control-expanded'}`}>
       <BasemapControl
         activeBasemap={activeBasemap}
         onChange={handleBasemapChange}
       />
       <IcmbioLayerControl
-        activeLayerKey={activeIcmbioLayerKey}
+        activeLayerKeys={activeIcmbioLayerKeys}
         isCollapsed={isIcmbioControlCollapsed}
         onChange={handleIcmbioLayerChange}
         onToggleCollapsed={handleIcmbioControlToggle}
@@ -3756,7 +3848,7 @@ export default function MapView({
         <MapInvalidateOnLayout revision={layoutRevision} />
         <MapInvalidateOnContainerResize />
         <MapZoomTracker onZoomChange={setMapZoom} />
-        <IcmbioFeatureInfoHandler activeLayer={activeIcmbioLayer} />
+        <IcmbioFeatureInfoHandler activeLayer={activeIcmbioFeatureInfoLayer} />
         <Pane name="icmbio-wms" style={{ zIndex: 345 }} />
         <Pane name="car-reference" style={{ zIndex: 360 }} />
         <Pane name="gleba-layer" style={{ zIndex: 460 }} />
@@ -3787,7 +3879,7 @@ export default function MapView({
           />
         )}
 
-        {activeIcmbioLayer && (
+        {activeIcmbioLayers.map((activeIcmbioLayer) => (
           <WMSTileLayer
             key={activeIcmbioLayer.key}
             url={activeIcmbioLayer.url || ICMBIO_WMS_URL}
@@ -3802,7 +3894,7 @@ export default function MapView({
             maxZoom={20}
             attribution={activeIcmbioLayer.attribution || 'ICMBio / INDE'}
           />
-        )}
+        ))}
 
         <CarReferenceLayer
           carGeojson={carReferenceMapGeojson}
