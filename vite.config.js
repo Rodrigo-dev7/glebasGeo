@@ -16,18 +16,27 @@ const ibgeProxy = {
   rewrite: (path) => path.replace(/^\/ibge-wms/, '/geoserverIBGE/ows'),
 }
 
+const funaiProxy = {
+  target: 'https://geoserver.funai.gov.br',
+  changeOrigin: true,
+  secure: true,
+  rewrite: (path) => path.replace(/^\/funai-wms/, '/geoserver/Funai/wms'),
+}
+
 export default defineConfig({
   plugins: [tailwindcss(), react()],
   server: {
     proxy: {
       '/icmbio-wms': icmbioProxy,
       '/ibge-wms': ibgeProxy,
+      '/funai-wms': funaiProxy,
     },
   },
   preview: {
     proxy: {
       '/icmbio-wms': icmbioProxy,
       '/ibge-wms': ibgeProxy,
+      '/funai-wms': funaiProxy,
     },
   },
 })

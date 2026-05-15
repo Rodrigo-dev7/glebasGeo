@@ -54,6 +54,8 @@ const ICMBIO_WMS_URL = 'https://geoservicos.inde.gov.br/geoserver/ICMBio/ows'
 const ICMBIO_WMS_PROXY_URL = '/icmbio-wms'
 const IBGE_WMS_URL = 'https://geoservicos.ibge.gov.br/geoserverIBGE/ows'
 const IBGE_WMS_PROXY_URL = '/ibge-wms'
+const FUNAI_WMS_URL = 'https://geoserver.funai.gov.br/geoserver/Funai/wms'
+const FUNAI_WMS_PROXY_URL = '/funai-wms'
 const ICMBIO_FEATURE_INFO_EVENT = 'icmbiofeatureinfo'
 
 const ICMBIO_UC_LEGEND = [
@@ -69,6 +71,10 @@ const ICMBIO_AREA_PRIORITY_LEGEND = [
 
 const ICMBIO_EMBARGO_LEGEND = [
   { label: 'Area embargada', color: '#1478ff', borderColor: '#62ff3f' },
+]
+
+const FUNAI_TI_LEGEND = [
+  { label: 'Terra Indigena', color: '#8b5cf6', borderColor: '#d8b4fe' },
 ]
 
 const ICMBIO_WMS_SOURCE_LAYERS = [
@@ -164,6 +170,18 @@ const IBGE_BIOMES_WMS_LAYER = {
   ],
 }
 
+const FUNAI_TERRAS_INDIGENAS_WMS_LAYER = {
+  key: 'terras-indigenas',
+  label: 'Terras Indigenas',
+  layers: 'Funai:tis_poligonais_portarias',
+  title: 'Terras Indigenas - FUNAI',
+  url: FUNAI_WMS_URL,
+  proxyUrl: FUNAI_WMS_PROXY_URL,
+  attribution: 'FUNAI',
+  opacity: 0.64,
+  legend: FUNAI_TI_LEGEND,
+}
+
 const ICMBIO_WMS_LAYERS = [
   {
     key: 'all',
@@ -180,6 +198,7 @@ const ICMBIO_WMS_LAYERS = [
   ICMBIO_NORTHEAST_PRIORITY_LAYER,
   ...ICMBIO_WMS_SOURCE_LAYERS,
   IBGE_BIOMES_WMS_LAYER,
+  FUNAI_TERRAS_INDIGENAS_WMS_LAYER,
 ]
 
 const ICMBIO_WMS_LAYER_MAP = new Map(
@@ -192,6 +211,7 @@ const ICMBIO_LAYER_CONTROL_GROUPS = [
     items: [
       { layerKey: 'embargos', label: 'Embargos ICMBio', swatch: '#dc2626' },
       { layerKey: 'uc-federal', label: 'Unid. Conservacao', swatch: '#2f6f5e' },
+      { layerKey: 'terras-indigenas', label: 'Terras Ind\u00edgenas', swatch: '#8b5cf6' },
       { layerKey: 'prioridades-nordeste', label: '\u00c1reas Priorit\u00e1rias NE', swatch: '#d99a31' },
       { layerKey: 'biomas', label: 'Bioma', swatch: '#315d86' },
     ],
@@ -211,6 +231,7 @@ const ICMBIO_LAYER_CONTROL_GROUPS = [
 const ICMBIO_QUERYABLE_LAYERS = [
   ...ICMBIO_WMS_SOURCE_LAYERS,
   IBGE_BIOMES_WMS_LAYER,
+  FUNAI_TERRAS_INDIGENAS_WMS_LAYER,
 ]
 
 const ICMBIO_WMS_SOURCE_LAYER_MAP = new Map(
@@ -251,9 +272,11 @@ const ICMBIO_FEATURE_FIELD_LABELS = {
   area: 'Area',
   area_ha: 'Area (ha)',
   areahaalb: 'Area (ha)',
+  area_oficial: 'Area oficial',
   artigo_1: 'Artigo 1',
   artigo_2: 'Artigo 2',
   autuado: 'Autuado',
+  cod_ti: 'Codigo TI',
   biomas: 'Biomas',
   cnuc: 'CNUC',
   cd_bioma: 'Codigo do bioma',
@@ -262,7 +285,10 @@ const ICMBIO_FEATURE_FIELD_LABELS = {
   criacaoano: 'Ano de criacao',
   criacaoato: 'Ato de criacao',
   data: 'Data',
+  data_portaria: 'Data da portaria',
   demarcacao: 'Demarcacao',
+  etnia_nome: 'Povo',
+  fase_ti: 'Fase',
   esferaadm: 'Esfera',
   estados: 'Estados',
   gregional: 'Regional',
@@ -274,6 +300,7 @@ const ICMBIO_FEATURE_FIELD_LABELS = {
   municipio: 'Municipio',
   n: 'Numero',
   nome: 'Nome',
+  nome_ti: 'Terra Indigena',
   nm_bioma: 'Bioma',
   nomeacao: 'Acao recomendada',
   nome_ap: 'Nome da area',
@@ -284,12 +311,15 @@ const ICMBIO_FEATURE_FIELD_LABELS = {
   numero_emb: 'Embargo',
   obs: 'Observacao',
   origem: 'Origem',
+  portaria: 'Portaria',
   prior_acao: 'Prioridade de acao',
   prioridade: 'Prioridade de acao',
   prio: 'Prioridade de acao',
   serie: 'Serie',
   siglacateg: 'Categoria',
+  superficie: 'Superficie',
   tipo_infra: 'Tipo da infracao',
+  terra_indigena: 'Terra Indigena',
   uf: 'UF',
   ufabrang: 'UF',
   quadro: 'Quadro',
