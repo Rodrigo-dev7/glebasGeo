@@ -4,10 +4,10 @@ import GlebaPanel from './GlebaPanel'
 import CoordinateValidationPanel from './CoordinateValidationPanel'
 import GlebaAccordionList from './GlebaAccordionList'
 
-const MIN_SIDEBAR_WIDTH = 280
-const MAX_SIDEBAR_WIDTH = 640
-const DEFAULT_SIDEBAR_WIDTH = 320
-const SIDEBAR_WIDTH_STORAGE_KEY = 'glebasgeo:sidebar-width'
+const MIN_SIDEBAR_WIDTH = 260
+const MAX_SIDEBAR_WIDTH = 560
+const DEFAULT_SIDEBAR_WIDTH = 300
+const SIDEBAR_WIDTH_STORAGE_KEY = 'glebasgeo:sidebar-width:v2'
 const RESIZE_EDGE_HITBOX = 18
 
 function notifyLayoutAfterSidebarResize() {
