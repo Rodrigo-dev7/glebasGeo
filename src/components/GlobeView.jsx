@@ -6,8 +6,8 @@ const EARTH_RADIUS = 2.1
 const LAYER_RADIUS = 2.118
 const GLEBA_RADIUS = 2.13
 const BRAZIL_TARGET = {
-  lon: -51.9253,
-  lat: -14.235,
+  lon: -60.5,
+  lat: -18.5,
 }
 const INTRO_DURATION_MS = 7600
 const EARTH_TEXTURE_URL = 'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg'
@@ -137,7 +137,7 @@ function buildIntroCameraCurve() {
       cameraVectorFromLonLat(-12, 24, 10.2),
       cameraVectorFromLonLat(-30, 10, 7.2),
       cameraVectorFromLonLat(-43, -4, 5.35),
-      cameraVectorFromLonLat(BRAZIL_TARGET.lon, BRAZIL_TARGET.lat, 4.15),
+      cameraVectorFromLonLat(BRAZIL_TARGET.lon, BRAZIL_TARGET.lat, 5.05),
     ],
     false,
     'centripetal',
@@ -220,8 +220,8 @@ function resolveViewportTarget({ viewportRequest, glebas, carGeojson }) {
 
   if (viewportRequest.type === 'home') {
     return {
-      direction: lonLatToVector3(-51.9253, -14.235, 1).normalize(),
-      distance: 5.8,
+      direction: lonLatToVector3(BRAZIL_TARGET.lon, BRAZIL_TARGET.lat, 1).normalize(),
+      distance: 6.25,
     }
   }
 
@@ -1246,7 +1246,7 @@ export default function GlobeView({
         ? latestCameraPositionRef.current
         : introAnimation
         ? cameraVectorFromLonLat(-12, 24, 10.2)
-        : brazilDirection.multiplyScalar(5.8)
+        : brazilDirection.multiplyScalar(6.25)
     )
     cameraRef.current = camera
 

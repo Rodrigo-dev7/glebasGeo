@@ -3513,6 +3513,7 @@ function IcmbioLayerControl({ activeLayerKeys = [], isCollapsed, onChange, onTog
     () => activeLayerKeys.map((layerKey) => ICMBIO_WMS_LAYER_MAP.get(layerKey)).filter(Boolean),
     [activeLayerKeys]
   )
+  const activeLayerSummary = activeLayers.map((layer) => layer.label).join(' + ')
   const legendItems = useMemo(() => {
     const seen = new Set()
 
@@ -3528,29 +3529,58 @@ function IcmbioLayerControl({ activeLayerKeys = [], isCollapsed, onChange, onTog
   return (
     <div className={`icmbio-layer-control${isCollapsed ? ' is-collapsed' : ''}`} role="group" aria-label="Camadas ICMBio">
       <div className="icmbio-layer-control__header">
-        <span className="icmbio-layer-control__stack-icon" aria-hidden="true">
-          <IconLayerStack />
-        </span>
-        <span className="icmbio-layer-control__title" title={'An\u00e1lise Territorial'}>
-          {'An\u00e1lise Territorial'}
-        </span>
-        {activeLayerCount > 0 && (
-          <span className="icmbio-layer-control__mode">
-            {activeLayerCount}
-          </span>
+        {isCollapsed ? (
+          <button
+            type="button"
+            className="icmbio-layer-control__collapsed-trigger"
+            aria-expanded={false}
+            aria-label="Expandir Analise Territorial"
+            title="Expandir Analise Territorial"
+            onClick={onToggleCollapsed}
+          >
+            <span className="icmbio-layer-control__stack-icon" aria-hidden="true">
+              <IconLayerStack />
+            </span>
+            {activeLayerCount > 0 && (
+              <span className="icmbio-layer-control__collapsed-count" aria-hidden="true">
+                {activeLayerCount}
+              </span>
+            )}
+          </button>
+        ) : (
+          <>
+            <span className="icmbio-layer-control__stack-icon" aria-hidden="true">
+              <IconLayerStack />
+            </span>
+            <span className="icmbio-layer-control__title-block">
+              <span className="icmbio-layer-control__title" title={'An\u00e1lise Territorial'}>
+                {'An\u00e1lise Territorial'}
+              </span>
+              {activeLayerCount > 0 && (
+                <span className="icmbio-layer-control__active-summary" title={activeLayerSummary}>
+                  {activeLayerSummary}
+                </span>
+              )}
+            </span>
+            {activeLayerCount > 0 && (
+              <span className="icmbio-layer-control__mode">
+                {activeLayerCount}
+              </span>
+            )}
+            <button
+              type="button"
+              className="icmbio-layer-control__toggle"
+              aria-expanded
+              aria-label="Esconder camadas ICMBio"
+              title="Esconder camadas ICMBio"
+              onClick={onToggleCollapsed}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          className="icmbio-layer-control__toggle"
-          aria-expanded={!isCollapsed}
-          aria-label={isCollapsed ? 'Expandir camadas ICMBio' : 'Esconder camadas ICMBio'}
-          title={isCollapsed ? 'Expandir camadas ICMBio' : 'Esconder camadas ICMBio'}
-          onClick={onToggleCollapsed}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
       </div>
       {!isCollapsed && (
         <div className="icmbio-layer-control__content">

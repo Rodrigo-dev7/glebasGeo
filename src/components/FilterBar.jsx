@@ -113,8 +113,6 @@ export default function FilterBar({
       </button>
 
       <div className="filter-bar__intro">
-        <span className="filter-label">Mapa operacional</span>
-        <strong className="filter-summary">Filtre a camada principal por status de validacao</strong>
         <div className="filter-point-mode">
           <div className="filter-point-mode__actions" role="group" aria-label="Visualizacao global dos pontos">
             {POINT_DISPLAY_OPTIONS.map((option) => {

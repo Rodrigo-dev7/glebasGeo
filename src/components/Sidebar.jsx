@@ -6,7 +6,7 @@ import GlebaAccordionList from './GlebaAccordionList'
 
 const MIN_SIDEBAR_WIDTH = 260
 const MAX_SIDEBAR_WIDTH = 560
-const DEFAULT_SIDEBAR_WIDTH = 300
+const DEFAULT_SIDEBAR_WIDTH = 288
 const SIDEBAR_WIDTH_STORAGE_KEY = 'glebasgeo:sidebar-width:v2'
 const RESIZE_EDGE_HITBOX = 18
 
@@ -192,6 +192,7 @@ export default function Sidebar({
 
   const sidebarContentId = 'sidebar-content'
   const renderedSidebarWidth = isResizingRef.current ? sidebarWidthRef.current : sidebarWidth
+  const hasImportedGlebas = Boolean(importedDataset?.geojson?.features?.length)
 
   return (
     <aside
@@ -293,6 +294,11 @@ export default function Sidebar({
               onVisibilityToggle={toggleGlebaVisibility}
               activeVertexReference={activeVertexReference}
               onActiveVertexChange={onActiveVertexChange}
+              emptyMessage={
+                hasImportedGlebas
+                  ? 'Nenhuma gleba disponivel para o filtro atual.'
+                  : 'Nenhuma gleba carregada ainda. Importe um arquivo ou adicione uma gleba manualmente para iniciar a analise.'
+              }
             />
           </div>
 

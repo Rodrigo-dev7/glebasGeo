@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { dedupeCarReferenceFeatures } from '../services/carReferenceFeatureService'
 
 const CAR_FEATURE_LIST_PREVIEW_LIMIT = 250
+const SUPPORTED_FORMATS = ['Excel', 'GeoJSON', 'KML', 'KMZ', 'SHP']
 
 function IconFileSelect() {
   return (
@@ -493,7 +494,8 @@ export default function CoordinateValidationPanel({
     <section className="coord-panel">
       <div className="coord-panel-header">
         <div>
-          <div className="coord-panel-kicker">Validação geoespacial</div>
+          <div className="coord-panel-kicker">Fluxo de analise</div>
+          <div className="coord-panel-title">Validacao Geoespacial</div>
         </div>
       </div>
 
@@ -581,7 +583,12 @@ export default function CoordinateValidationPanel({
 
       <div className="coord-upload">
         <span className="coord-upload-label">
-          {isImporting || isImportingCar ? 'Processando arquivos...' : 'Formatos suportados: Excel, GeoJSON, KML, KMZ e SHP'}
+          {isImporting || isImportingCar ? 'Processando arquivos...' : 'Formatos suportados'}
+        </span>
+        <span className="coord-format-chips" aria-label="Formatos suportados">
+          {SUPPORTED_FORMATS.map((format) => (
+            <span key={format} className="coord-format-chip">{format}</span>
+          ))}
         </span>
         <span className="coord-upload-hint">
           Importe uma ou varias glebas em `.xls`, `.xlsx`, `.geojson` ou `.json` e carregue uma ou varias bases do CAR em `.kml`, `.kmz` ou `.shp`; selecione o `.dbf` junto com o `.shp` para importar atributos como o numero do CAR.

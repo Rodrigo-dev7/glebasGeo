@@ -212,6 +212,7 @@ export default function GlebaAccordionList({
   onVisibilityToggle,
   activeVertexReference = null,
   onActiveVertexChange,
+  emptyMessage = 'Nenhuma gleba disponivel para o filtro atual.',
 }) {
   const [expandedIds, setExpandedIds] = useState([])
 
@@ -262,11 +263,10 @@ export default function GlebaAccordionList({
 
   if (!glebas.length) {
     return (
-      <div className="sidebar-hint sidebar-hint--compact">
-        <div className="hint-icon">Lista</div>
-        <p className="hint-text">
-          Nenhuma gleba disponivel para o filtro atual.
-        </p>
+      <div className="sidebar-hint sidebar-hint--compact sidebar-hint--empty">
+        <div className="hint-icon">Base</div>
+        <strong className="hint-title">Analise pronta para iniciar</strong>
+        <p className="hint-text">{emptyMessage}</p>
       </div>
     )
   }
