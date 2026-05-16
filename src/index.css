@@ -8152,6 +8152,8 @@ input:focus-visible,
 .filter-point-mode__button,
 .filter-bar__toggle,
 .basemap-control__button,
+.basemap-control__trigger,
+.basemap-control__option,
 .icmbio-layer-control__button,
 .icmbio-layer-control__collapsed-trigger,
 .icmbio-layer-control__toggle {
@@ -8171,6 +8173,10 @@ input:focus-visible,
 .filter-bar__toggle:active,
 .basemap-control__button:hover,
 .basemap-control__button:active,
+.basemap-control__trigger:hover,
+.basemap-control__trigger:active,
+.basemap-control__option:hover,
+.basemap-control__option:active,
 .icmbio-layer-control__button:hover,
 .icmbio-layer-control__button:active,
 .icmbio-layer-control__collapsed-trigger:hover,
@@ -8410,5 +8416,185 @@ input:focus-visible,
 
   .sidebar-logo-sub {
     font-size: 8.75px;
+  }
+}
+
+/* Compact basemap popover */
+.basemap-control {
+  top: 12px;
+  right: 14px;
+  z-index: 1040;
+  align-items: flex-end;
+  width: auto;
+  padding: 0 !important;
+  overflow: visible;
+  border: 0 !important;
+  background: transparent !important;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.basemap-control.is-open {
+  z-index: 1080;
+}
+
+.basemap-control__trigger {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  border-radius: 15px;
+  background:
+    linear-gradient(180deg, rgba(16, 35, 58, 0.9), rgba(6, 13, 24, 0.94)),
+    radial-gradient(circle at 50% 108%, rgba(14, 165, 233, 0.32), transparent 40%),
+    radial-gradient(circle at 26% 18%, rgba(125, 211, 252, 0.18), transparent 42%);
+  color: #a8e6ff;
+  cursor: pointer;
+  box-shadow:
+    0 15px 30px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(56, 189, 248, 0.08),
+    0 0 22px rgba(14, 165, 233, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.basemap-control__trigger::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  bottom: 7px;
+  left: 10px;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.75), transparent);
+  opacity: 0.72;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+  pointer-events: none;
+}
+
+.basemap-control__trigger:hover,
+.basemap-control__trigger[aria-expanded="true"] {
+  border-color: rgba(125, 211, 252, 0.46);
+  background:
+    linear-gradient(180deg, rgba(22, 48, 78, 0.96), rgba(8, 18, 33, 0.96)),
+    radial-gradient(circle at 50% 108%, rgba(14, 165, 233, 0.42), transparent 42%),
+    radial-gradient(circle at 26% 18%, rgba(125, 211, 252, 0.24), transparent 42%);
+  color: #f2fbff;
+  box-shadow:
+    0 15px 34px rgba(0, 0, 0, 0.32),
+    0 0 0 1px rgba(56, 189, 248, 0.14),
+    0 0 26px rgba(14, 165, 233, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+.basemap-control__trigger:focus-visible,
+.basemap-control__option:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.62);
+  outline-offset: 3px;
+}
+
+.basemap-control__trigger-icon {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.36));
+}
+
+.basemap-control__trigger-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.basemap-control__menu {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: calc(100% + 10px);
+  display: grid;
+  gap: 6px;
+  min-width: 154px;
+  padding: 7px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(9, 19, 34, 0.96), rgba(6, 13, 24, 0.96)),
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.12), transparent 42%);
+  backdrop-filter: blur(14px) saturate(130%);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.34),
+    0 0 0 1px rgba(56, 189, 248, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transform-origin: top right;
+  animation: basemap-menu-in 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.basemap-control__option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  gap: 9px;
+  padding: 6px 8px 6px 6px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: #a9bdd2;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+}
+
+.basemap-control__option:hover {
+  border-color: rgba(125, 211, 252, 0.14);
+  background: rgba(255, 255, 255, 0.055);
+  color: #eef8ff;
+}
+
+.basemap-control__option.is-active {
+  border-color: rgba(125, 211, 252, 0.34);
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, 0.18), rgba(56, 189, 248, 0.06)),
+    rgba(8, 18, 33, 0.76);
+  color: #e7f8ff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.basemap-control__option .basemap-control__thumb {
+  width: 28px;
+  height: 24px;
+  border-radius: 9px;
+}
+
+.basemap-control__label {
+  flex: 1 1 auto;
+}
+
+.basemap-control__option-check {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.2);
+}
+
+.basemap-control__option.is-active .basemap-control__option-check {
+  background: #7dd3fc;
+  box-shadow:
+    0 0 12px rgba(56, 189, 248, 0.48),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+@keyframes basemap-menu-in {
+  from {
+    opacity: 0;
+    transform: translateX(4px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
   }
 }

@@ -3476,20 +3476,123 @@ function ValidationPointMarker({ queryPoint }) {
   )
 }
 
-function BasemapControl({ activeBasemap, onChange }) {
+function IconGlobeLayers() {
   return (
-    <div className="basemap-control" role="group" aria-label="Base do mapa">
-      {Object.values(BASEMAPS).map((basemap) => (
-        <button
-          key={basemap.key}
-          type="button"
-          className={`basemap-control__button ${activeBasemap === basemap.key ? 'is-active' : ''}`}
-          onClick={() => onChange(basemap.key)}
-        >
-          <span className={`basemap-control__thumb basemap-control__thumb--${basemap.key}`} aria-hidden="true" />
-          <span className="basemap-control__label">{basemap.label}</span>
-        </button>
-      ))}
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14.7 5.2a10.7 10.7 0 1 0 0 21.4" />
+      <path d="M14.7 5.2c-3.1 2.9-4.8 6.6-4.8 10.7s1.7 7.7 4.8 10.7" />
+      <path d="M14.7 5.2c2.7 2.6 4.2 5.6 4.6 9.2" />
+      <path d="M5.2 15.9h17.5" />
+      <path d="M6.9 10.5h14.4" />
+      <path d="M6.9 21.3h9.2" />
+      <path d="m22.2 17.3 5.3 2.7-5.3 2.7-5.3-2.7 5.3-2.7Z" />
+      <path d="m16.9 23.3 5.3 2.7 5.3-2.7" />
+    </svg>
+  )
+}
+
+function MapLayerSwitcher({ activeBasemap, onChange }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const controlRef = useRef(null)
+  const basemapOptions = useMemo(() => Object.values(BASEMAPS), [])
+  const activeBasemapConfig = BASEMAPS[activeBasemap] || BASEMAPS.dark
+
+  const focusMenuItem = useCallback((targetIndex) => {
+    window.requestAnimationFrame(() => {
+      const items = Array.from(controlRef.current?.querySelectorAll('.basemap-control__option') || [])
+      items[targetIndex]?.focus()
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false)
+        controlRef.current?.querySelector('.basemap-control__trigger')?.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen])
+
+  const handleTriggerKeyDown = (event) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+
+    event.preventDefault()
+    const activeIndex = Math.max(0, basemapOptions.findIndex((basemap) => basemap.key === activeBasemap))
+    const targetIndex = event.key === 'ArrowUp' ? basemapOptions.length - 1 : activeIndex
+    setIsOpen(true)
+    focusMenuItem(targetIndex)
+  }
+
+  const handleMenuKeyDown = (event) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+
+    event.preventDefault()
+    const items = Array.from(controlRef.current?.querySelectorAll('.basemap-control__option') || [])
+    if (!items.length) return
+
+    const currentIndex = items.indexOf(document.activeElement)
+    const lastIndex = items.length - 1
+    let nextIndex = currentIndex
+
+    if (event.key === 'ArrowDown') nextIndex = currentIndex >= lastIndex ? 0 : currentIndex + 1
+    if (event.key === 'ArrowUp') nextIndex = currentIndex <= 0 ? lastIndex : currentIndex - 1
+    if (event.key === 'Home') nextIndex = 0
+    if (event.key === 'End') nextIndex = lastIndex
+
+    items[nextIndex]?.focus()
+  }
+
+  const handleSelect = (basemapKey) => {
+    onChange(basemapKey)
+  }
+
+  return (
+    <div ref={controlRef} className={`basemap-control${isOpen ? ' is-open' : ''}`} role="group" aria-label="Base do mapa">
+      <button
+        type="button"
+        className={`basemap-control__trigger basemap-control__trigger--${activeBasemap}`}
+        aria-label={`Selecionar base do mapa. Atual: ${activeBasemapConfig.label}`}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        title={`Base atual: ${activeBasemapConfig.label}`}
+        onClick={() => setIsOpen((current) => !current)}
+        onKeyDown={handleTriggerKeyDown}
+      >
+        <span className="basemap-control__trigger-icon" aria-hidden="true">
+          <IconGlobeLayers />
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="basemap-control__menu" role="menu" aria-label="Selecionar base do mapa" onKeyDown={handleMenuKeyDown}>
+          {basemapOptions.map((basemap) => {
+            const isActive = activeBasemap === basemap.key
+
+            return (
+              <button
+                key={basemap.key}
+                type="button"
+                className={`basemap-control__option${isActive ? ' is-active' : ''}`}
+                role="menuitemradio"
+                aria-checked={isActive}
+                onClick={() => handleSelect(basemap.key)}
+              >
+                <span className={`basemap-control__thumb basemap-control__thumb--${basemap.key}`} aria-hidden="true" />
+                <span className="basemap-control__label">{basemap.label}</span>
+                <span className="basemap-control__option-check" aria-hidden="true" />
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -3886,7 +3989,7 @@ export default function MapView({
 
   return (
     <div className={`map-wrapper${shouldRenderGlobe ? ' map-wrapper--globe' : ''}${isIntroActive && shouldRenderGlobe ? ' map-wrapper--intro' : ''}${hasActiveIcmbioLayer ? ' map-wrapper--icmbio' : ''}${isIcmbioControlCollapsed ? '' : ' map-wrapper--icmbio-control-expanded'}`}>
-      <BasemapControl
+      <MapLayerSwitcher
         activeBasemap={activeBasemap}
         onChange={handleBasemapChange}
       />
