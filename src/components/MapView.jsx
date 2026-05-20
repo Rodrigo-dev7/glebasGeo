@@ -2340,11 +2340,11 @@ function GeoJSONLayer({
             if (!visibleFeatureIdSetRef.current.has(featureId)) return
             event.target.setStyle(featureStyle(feature, selectedIdRef.current, matchedFeatureIdsRef.current))
           },
-          click() {
+          click(event) {
             if (!visibleFeatureIdSetRef.current.has(featureId)) return
 
             onSelect(feature)
-            leafletLayer.openPopup()
+            leafletLayer.openPopup(event.latlng)
           },
         })
 
@@ -2469,7 +2469,7 @@ function CarReferenceLayer({
     onSelectFeature?.(candidate.datasetId, candidate.featureId, { focusMap: false })
 
     if (candidate.layer && options.openPopup) {
-      candidate.layer.openPopup?.()
+      candidate.layer.openPopup?.(options.popupLatLng)
     }
   }, [closeSelectorPopup, onSelectFeature])
 
@@ -2484,7 +2484,8 @@ function CarReferenceLayer({
         buildCarSelectionPopupContent(
           candidates,
           selectedLayerKeyRef.current,
-          selectCarCandidate
+          (candidate, options = {}) =>
+            selectCarCandidate(candidate, { ...options, popupLatLng: latlng })
         )
       )
 
@@ -2636,7 +2637,10 @@ function CarReferenceLayer({
               return
             }
 
-            selectCarCandidate(resolvedCandidates[0], { openPopup: true })
+            selectCarCandidate(resolvedCandidates[0], {
+              openPopup: true,
+              popupLatLng: event.latlng,
+            })
           },
         })
 
