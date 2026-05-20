@@ -1877,6 +1877,20 @@ function buildCarFeatureSelectionMeta(feature, area) {
   return [datasetName, code, municipalityUf, areaLabel].filter(Boolean).join(' | ')
 }
 
+function getCarSelectionCountLabel(candidates = []) {
+  const types = [...new Set(
+    candidates
+      .map((candidate) => getReferencePresentation(candidate.feature).type)
+      .filter(Boolean)
+  )]
+
+  if (types.length === 1) {
+    return types[0] === 'CAR' ? 'CARs' : 'KMLs'
+  }
+
+  return 'poligonos'
+}
+
 function collectCarReferenceCandidatesAtLatLng(latlng, featureLayers) {
   if (!latlng || !featureLayers?.size) return []
 
@@ -1936,7 +1950,7 @@ function buildCarSelectionPopupContent(candidates, selectedLayerKey, onSelectCan
 
   const title = document.createElement('div')
   title.className = 'car-selector-popup__title'
-  title.textContent = `${candidates.length} KMLs neste ponto`
+  title.textContent = `${candidates.length} ${getCarSelectionCountLabel(candidates)} neste ponto`
 
   const subtitle = document.createElement('div')
   subtitle.className = 'car-selector-popup__subtitle'
@@ -1958,7 +1972,7 @@ function buildCarSelectionPopupContent(candidates, selectedLayerKey, onSelectCan
 
     const indexNode = document.createElement('span')
     indexNode.className = 'car-selector-popup__index'
-    indexNode.textContent = `KML ${index + 1}`
+    indexNode.textContent = `${getReferencePresentation(candidate.feature).type} ${index + 1}`
 
     const body = document.createElement('span')
     body.className = 'car-selector-popup__body'

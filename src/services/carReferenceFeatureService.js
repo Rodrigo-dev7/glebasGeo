@@ -1,12 +1,38 @@
+const BUSINESS_IDENTIFIER_KEYS = [
+  'numero_car_recibo',
+  'numero_car_imovel',
+  'cod_imovel',
+  'codigo_imovel',
+  'car',
+]
+
+function normalizeBusinessIdentifier(value) {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '')
+
+  return normalized || null
+}
+
+function getCarReferenceBusinessKey(feature) {
+  const properties = feature?.properties || {}
+
+  for (const key of BUSINESS_IDENTIFIER_KEYS) {
+    const normalizedValue = normalizeBusinessIdentifier(properties[key])
+    if (normalizedValue) return `${key}:${normalizedValue}`
+  }
+
+  return null
+}
+
 export function getCarReferenceFeatureKey(feature) {
   const properties = feature?.properties || {}
 
   return (
+    getCarReferenceBusinessKey(feature) ||
+    getCarReferenceGeometryKey(feature) ||
     properties.id ||
-    properties.numero_car_recibo ||
-    properties.cod_imovel ||
-    properties.codigo_imovel ||
-    properties.car ||
     properties.nome ||
     JSON.stringify(feature?.geometry || null)
   )
@@ -112,33 +138,117 @@ function getCarReferenceGeometryKey(feature) {
   return JSON.stringify(geometry)
 }
 
-export function dedupeCarReferenceFeatures(features = []) {
-  const seenKeys = new Set()
-  const seenGeometryKeys = new Set()
+function geometryToPolygons(geometry) {
+  if (!geometry) return []
 
-  return features.filter((feature) => {
-    const key = getCarReferenceFeatureKey(feature)
+  if (geometry.type === 'Polygon') {
+    return [geometry.coordinates || []]
+  }
 
-    if (key) {
-      if (seenKeys.has(key)) {
-        return false
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates || []
+  }
+
+  return []
+}
+
+function mergeFeatureGeometries(features = []) {
+  const seenPolygonKeys = new Set()
+  const polygons = []
+
+  features.forEach((feature) => {
+    geometryToPolygons(feature.geometry).forEach((polygon) => {
+      const polygonKey = canonicalPolygonKey(polygon)
+      if (polygonKey && seenPolygonKeys.has(polygonKey)) return
+
+      if (polygonKey) {
+        seenPolygonKeys.add(polygonKey)
       }
+      polygons.push(polygon)
+    })
+  })
 
-      seenKeys.add(key)
-      return true
+  if (!polygons.length) {
+    return features[0]?.geometry || null
+  }
+
+  return polygons.length === 1
+    ? {
+        type: 'Polygon',
+        coordinates: polygons[0],
+      }
+    : {
+        type: 'MultiPolygon',
+        coordinates: polygons,
+      }
+}
+
+function mergeCarReferenceFeatureGroup(features = []) {
+  if (features.length <= 1) {
+    return features[0] || null
+  }
+
+  const [firstFeature] = features
+  const mergedGeometry = mergeFeatureGeometries(features)
+
+  return {
+    ...firstFeature,
+    properties: {
+      ...firstFeature.properties,
+      duplicateFeatureCount: features.length - 1,
+      mergedFeatureIds: features
+        .map((feature) => feature.properties?.id)
+        .filter(Boolean),
+    },
+    geometry: mergedGeometry,
+  }
+}
+
+export function dedupeCarReferenceFeatures(features = []) {
+  const groupedByBusinessKey = new Map()
+  const featuresWithoutBusinessKey = []
+
+  features.forEach((feature) => {
+    const businessKey = getCarReferenceBusinessKey(feature)
+
+    if (!businessKey) {
+      featuresWithoutBusinessKey.push(feature)
+      return
     }
 
-    const geometryKey = getCarReferenceGeometryKey(feature)
+    if (!groupedByBusinessKey.has(businessKey)) {
+      groupedByBusinessKey.set(businessKey, [])
+    }
 
+    groupedByBusinessKey.get(businessKey).push(feature)
+  })
+
+  const mergedBusinessFeatures = [...groupedByBusinessKey.values()]
+    .map(mergeCarReferenceFeatureGroup)
+    .filter(Boolean)
+  const dedupedFeatures = [...mergedBusinessFeatures]
+  const seenGeometryKeys = new Set()
+
+  mergedBusinessFeatures.forEach((feature) => {
+    const geometryKey = getCarReferenceGeometryKey(feature)
+    if (geometryKey) {
+      seenGeometryKeys.add(geometryKey)
+    }
+  })
+
+  featuresWithoutBusinessKey.forEach((feature) => {
+    const geometryKey = getCarReferenceGeometryKey(feature)
     if (geometryKey && seenGeometryKeys.has(geometryKey)) {
-      return false
+      return
     }
 
     if (geometryKey) {
       seenGeometryKeys.add(geometryKey)
     }
-    return true
+    dedupedFeatures.push(feature)
   })
+
+  return dedupedFeatures
 }
 
 export function normalizeCarReferenceDataset(dataset) {
