@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/car-public-api/:path*",
+      "destination": "https://consulta.car.gov.br/api/:path*"
+    },
+    {
+      "source": "/car-public-wfs",
+      "destination": "https://consulta.car.gov.br/geoserver/consulta_publica/ows"
+    }
+  ]
+}
