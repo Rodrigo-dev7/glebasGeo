@@ -12,6 +12,7 @@ import { parseCarReferenceFile } from '../services/kmlGeoService'
 import { parseManualGlebaText } from '../services/manualGlebaTextService'
 import { normalizeCarReferenceDataset } from '../services/carReferenceFeatureService'
 import { analyzeCarReferenceContainment } from '../services/carContainmentAnalysisService'
+import { consultPublicCarByCode } from '../services/carPublicConsultationService'
 import {
   applyCarOverlapValidationToFeature,
   applyCarOverlapValidationToFeatureCollection,
@@ -336,6 +337,9 @@ export function useGlebas() {
   const [matchedFeatureIds, setMatchedFeatureIds] = useState([])
   const [mapViewportRequest, setMapViewportRequest] = useState(null)
   const [hiddenFeatureIds, setHiddenFeatureIds] = useState([])
+  const [consultedCar, setConsultedCar] = useState(null)
+  const [carConsultationError, setCarConsultationError] = useState('')
+  const [isConsultingCar, setIsConsultingCar] = useState(false)
 
   const carReferenceDatasetsWithContainment = useMemo(
     () => analyzeCarReferenceContainment(carReferenceDatasets),
@@ -773,6 +777,9 @@ export function useGlebas() {
     setActiveCarReferenceDatasetId(null)
     setSelectedCarReferenceFeatureId(null)
     setCarImportError('')
+    setConsultedCar(null)
+    setCarConsultationError('')
+    setIsConsultingCar(false)
     setValidationResult(null)
     setQueryPoint(null)
     setSelectedGleba(null)
@@ -835,6 +842,58 @@ export function useGlebas() {
 
     return true
   }, [importedDataset, syncValidationStateForGeojson])
+
+  const consultCarByRegistration = useCallback(async (carCode) => {
+    setIsConsultingCar(true)
+    setCarConsultationError('')
+
+    try {
+      const result = await consultPublicCarByCode(carCode)
+      setConsultedCar(result)
+      setMapViewportRequest({
+        type: 'consulted-car',
+        carCode: result.code,
+        requestKey: `consulted-car-${result.code}-${Date.now()}`,
+      })
+      return result
+    } catch (error) {
+      setCarConsultationError(
+        error?.message || 'Nao foi possivel consultar o CAR informado. Tente novamente.'
+      )
+      throw error
+    } finally {
+      setIsConsultingCar(false)
+    }
+  }, [])
+
+  const focusConsultedCar = useCallback(() => {
+    if (!consultedCar?.code) return false
+
+    setMapViewportRequest({
+      type: 'consulted-car',
+      carCode: consultedCar.code,
+      requestKey: `consulted-car-${consultedCar.code}-${Date.now()}`,
+    })
+    return true
+  }, [consultedCar])
+
+  const clearConsultedCar = useCallback(() => {
+    setConsultedCar(null)
+    setCarConsultationError('')
+
+    if (importedDataset?.geojson?.features?.length) {
+      setMapViewportRequest({
+        type: 'dataset',
+        datasetKey: `${createImportedDatasetViewportKey(importedDataset)}-${Date.now()}`,
+      })
+      return
+    }
+
+    setMapViewportRequest({
+      type: 'home',
+      requestKey: `home-${Date.now()}`,
+    })
+  }, [importedDataset])
 
   const toggleGlebaVisibility = useCallback((featureId) => {
     if (!featureId) return
@@ -1005,6 +1064,12 @@ export function useGlebas() {
     selectCarReferenceFeature,
     removeCarReferenceDataset,
     clearCarReferenceDataset,
+    consultedCar,
+    carConsultationError,
+    isConsultingCar,
+    consultCarByRegistration,
+    clearConsultedCar,
+    focusConsultedCar,
     validationResult,
     validateCoordinate,
     queryPoint,

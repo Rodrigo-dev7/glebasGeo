@@ -51,6 +51,7 @@ export default function Sidebar({
   isImporting,
   importDataset,
   onOpenManualGlebaModal,
+  onOpenCarConsultModal,
   clearImportedDataset,
   clearApplicationData,
   carReferenceDataset,
@@ -263,6 +264,7 @@ export default function Sidebar({
             isImporting={isImporting}
             importDataset={importDataset}
             onOpenManualGlebaModal={onOpenManualGlebaModal}
+            onOpenCarConsultModal={onOpenCarConsultModal}
             clearImportedDataset={clearImportedDataset}
             clearApplicationData={clearApplicationData}
             carReferenceDataset={carReferenceDataset}

@@ -644,6 +644,25 @@ const CAR_REFERENCE_SELECTED_STYLE = {
   dashArray: null,
 }
 
+const PUBLIC_CAR_STATUS_STYLES = {
+  active: {
+    color: '#38bdf8',
+    fillColor: '#22c55e',
+  },
+  pending: {
+    color: '#facc15',
+    fillColor: '#f59e0b',
+  },
+  invalid: {
+    color: '#f87171',
+    fillColor: '#ef4444',
+  },
+  unknown: {
+    color: '#cbd5e1',
+    fillColor: '#64748b',
+  },
+}
+
 const CAR_REFERENCE_ACTIVE_DATASET_STYLE = {
   fillOpacity: 0.18,
   opacity: 1,
@@ -1716,6 +1735,59 @@ function carReferencePopupMarkup(feature) {
   `
 }
 
+function publicCarPopupMarkup(feature) {
+  const properties = feature.properties || {}
+  const municipalityUf = [
+    properties.municipio || '-',
+    properties.uf || null,
+  ].filter(Boolean).join(' / ')
+
+  return `
+    <div class="gleba-popup public-car-popup">
+      <div class="popup-top">
+        <div class="popup-nome">CAR consultado</div>
+      </div>
+      <div class="popup-grid">
+        <div class="popup-cell popup-cell--full">
+          <span class="pcell-label">CAR</span>
+          <span class="pcell-val pcell-mono">${escapeHtml(properties.carCode || '-')}</span>
+        </div>
+        <div class="popup-cell popup-cell--full public-car-popup__status public-car-popup__status--${escapeHtml(properties.statusTone || 'unknown')}">
+          <span class="pcell-label">Status</span>
+          <span class="pcell-val">${escapeHtml(properties.statusLabel || 'Status desconhecido')}</span>
+        </div>
+        <div class="popup-cell popup-cell--full">
+          <span class="pcell-label">Municipio / UF</span>
+          <span class="pcell-val">${escapeHtml(municipalityUf)}</span>
+        </div>
+        <div class="popup-cell">
+          <span class="pcell-label">Area</span>
+          <span class="pcell-val">${escapeHtml(formatArea(properties.area))}</span>
+        </div>
+        <div class="popup-cell">
+          <span class="pcell-label">Tipo</span>
+          <span class="pcell-val">${escapeHtml(properties.tipo || '-')}</span>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+function publicCarFeatureStyle(feature, isHovered = false) {
+  const statusTone = feature?.properties?.statusTone || 'unknown'
+  const statusStyle = PUBLIC_CAR_STATUS_STYLES[statusTone] || PUBLIC_CAR_STATUS_STYLES.unknown
+
+  return {
+    ...statusStyle,
+    opacity: 1,
+    fillOpacity: isHovered ? 0.34 : 0.22,
+    weight: isHovered ? 4.6 : 3.4,
+    dashArray: statusTone === 'active' ? '2 7' : '8 5',
+    lineCap: 'round',
+    lineJoin: 'round',
+  }
+}
+
 function featureStyle(feature, selectedId, matchedFeatureIds) {
   const base = STATUS_STYLES[feature.properties.status] || STATUS_STYLES.pendente
   const carValidationStatus = feature.properties.carOverlapValidation?.status
@@ -2732,6 +2804,95 @@ function CarReferenceLayer({
 
     lastViewportRequestRef.current = requestKey
   }, [carGeojson, leafMap, viewportRequest])
+
+  return null
+}
+
+function PublicCarConsultationLayer({
+  consultedCar,
+  viewportRequest,
+}) {
+  const leafMap = useMap()
+  const featureGroupRef = useRef(null)
+  const lastDatasetKeyRef = useRef(null)
+  const lastViewportRequestRef = useRef(null)
+
+  useEffect(() => {
+    const featureGroup = L.featureGroup().addTo(leafMap)
+    featureGroupRef.current = featureGroup
+
+    return () => {
+      featureGroup.remove()
+      featureGroupRef.current = null
+    }
+  }, [leafMap])
+
+  useEffect(() => {
+    if (!featureGroupRef.current) return
+
+    const features = consultedCar?.geojson?.features || []
+    const nextDatasetKey = [
+      consultedCar?.code || 'sem-car',
+      consultedCar?.fetchedAt || '',
+      features.length,
+      consultedCar?.geometrySource || '',
+    ].join('|')
+
+    if (lastDatasetKeyRef.current === nextDatasetKey) {
+      return
+    }
+
+    lastDatasetKeyRef.current = nextDatasetKey
+    featureGroupRef.current.clearLayers()
+
+    if (!features.length) return
+
+    const publicCarLayer = L.geoJSON(consultedCar.geojson, {
+      pane: 'queried-car',
+      style: (feature) => publicCarFeatureStyle(feature),
+      onEachFeature: (feature, layer) => {
+        layer.bindPopup(publicCarPopupMarkup(feature), CAR_REFERENCE_POPUP_OPTIONS)
+
+        layer.on({
+          mouseover(event) {
+            event.target.setStyle(publicCarFeatureStyle(feature, true))
+            event.target.bringToFront()
+          },
+          mouseout(event) {
+            event.target.setStyle(publicCarFeatureStyle(feature, false))
+          },
+          click(event) {
+            if (event.originalEvent) {
+              L.DomEvent.stop(event.originalEvent)
+            }
+
+            layer.openPopup(event.latlng)
+          },
+        })
+      },
+    })
+
+    featureGroupRef.current.addLayer(publicCarLayer)
+  }, [consultedCar])
+
+  useEffect(() => {
+    const requestKey = viewportRequest?.requestKey
+
+    if (
+      !viewportRequest ||
+      viewportRequest.type !== 'consulted-car' ||
+      lastViewportRequestRef.current === requestKey
+    ) {
+      return
+    }
+
+    const bounds = datasetBounds(consultedCar?.geojson)
+    if (bounds?.isValid()) {
+      animateToBounds(leafMap, bounds, { maxZoom: 18, duration: 1.45, padding: [76, 76] })
+    }
+
+    lastViewportRequestRef.current = requestKey
+  }, [consultedCar, leafMap, viewportRequest])
 
   return null
 }
@@ -3820,6 +3981,7 @@ function shouldShowDetailedMapForViewport(viewportRequest) {
     'point',
     'car-reference',
     'car-feature',
+    'consulted-car',
   ].includes(viewportRequest.type)
 }
 
@@ -3842,6 +4004,7 @@ export default function MapView({
   updateSelectedGlebaCoordinates,
   layoutRevision = 0,
   pointDisplayMode = 'marked',
+  consultedCar = null,
 }) {
   const selectedId = selectedGleba?.properties?.id
   const [draggingFeatureId, setDraggingFeatureId] = useState(null)
@@ -4032,6 +4195,7 @@ export default function MapView({
         <IcmbioFeatureInfoHandler activeLayer={activeIcmbioFeatureInfoLayer} />
         <Pane name="icmbio-wms" style={{ zIndex: 345 }} />
         <Pane name="car-reference" style={{ zIndex: 360 }} />
+        <Pane name="queried-car" style={{ zIndex: 430 }} />
         <Pane name="gleba-layer" style={{ zIndex: 460 }} />
         <Pane name="gleba-points" style={{ zIndex: 620 }} />
         <Pane name="selected-vertices" style={{ zIndex: 650 }} />
@@ -4086,6 +4250,11 @@ export default function MapView({
           selectedDatasetId={activeCarReferenceDatasetId}
           viewportRequest={viewportRequest}
           onSelectFeature={handleCarReferenceFeatureSelect}
+        />
+
+        <PublicCarConsultationLayer
+          consultedCar={consultedCar}
+          viewportRequest={viewportRequest}
         />
 
         <GeoJSONLayer

@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar'
 import MapView from './components/MapView'
 import FilterBar from './components/FilterBar'
 import ManualGlebaModal from './components/ManualGlebaModal'
+import CarConsultModal from './components/CarConsultModal'
 
 function IconChevronRight() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
   const [activeVertexReference, setActiveVertexReference] = useState(null)
   const [isMapHeaderCollapsed, setIsMapHeaderCollapsed] = useState(false)
   const [isManualGlebaModalOpen, setIsManualGlebaModalOpen] = useState(false)
+  const [isCarConsultModalOpen, setIsCarConsultModalOpen] = useState(false)
   const [manualGlebaText, setManualGlebaText] = useState('')
   const {
     glebas,
@@ -50,6 +52,12 @@ export default function App() {
     selectCarReferenceFeature,
     removeCarReferenceDataset,
     clearCarReferenceDataset,
+    consultedCar,
+    carConsultationError,
+    isConsultingCar,
+    consultCarByRegistration,
+    clearConsultedCar,
+    focusConsultedCar,
     validationResult,
     validateCoordinate,
     queryPoint,
@@ -165,6 +173,7 @@ export default function App() {
           isImporting={isImporting}
           importDataset={importDataset}
           onOpenManualGlebaModal={() => setIsManualGlebaModalOpen(true)}
+          onOpenCarConsultModal={() => setIsCarConsultModalOpen(true)}
           removeGleba={removeGleba}
           clearImportedDataset={clearImportedDataset}
           clearApplicationData={handleClearApplicationData}
@@ -224,6 +233,7 @@ export default function App() {
             updateSelectedGlebaCoordinates={updateSelectedGlebaCoordinates}
             layoutRevision={`${isSidebarVisible}-${isMapHeaderCollapsed}`}
             pointDisplayMode={pointDisplayMode}
+            consultedCar={consultedCar}
           />
         </main>
 
@@ -264,6 +274,17 @@ export default function App() {
         onTextChange={setManualGlebaText}
         defaultShowMarkers={pointDisplayMode === 'marked'}
         defaultValidatePoints={pointDisplayMode === 'validated'}
+      />
+
+      <CarConsultModal
+        open={isCarConsultModalOpen}
+        onClose={() => setIsCarConsultModalOpen(false)}
+        onConsult={consultCarByRegistration}
+        onClear={clearConsultedCar}
+        onFocus={focusConsultedCar}
+        consultedCar={consultedCar}
+        error={carConsultationError}
+        isLoading={isConsultingCar}
       />
     </div>
   )

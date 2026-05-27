@@ -1879,6 +1879,20 @@ body.is-resizing-sidebar .map-area {
   transform: translateY(-1px);
 }
 
+.coord-action-btn--consult-car {
+  background: rgba(45, 212, 191, 0.12);
+  border-color: rgba(45, 212, 191, 0.34);
+  color: #99f6e4;
+}
+
+.coord-action-btn--consult-car:hover:not(:disabled) {
+  background: rgba(45, 212, 191, 0.2);
+  border-color: rgba(45, 212, 191, 0.52);
+  color: #ccfbf1;
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.12), 0 4px 14px rgba(45, 212, 191, 0.1);
+  transform: translateY(-1px);
+}
+
 .coord-action-btn--danger {
   background: var(--red-dim);
   border-color: var(--red-border);
@@ -1915,6 +1929,10 @@ body.is-resizing-sidebar .map-area {
 
 .coord-action-btn--secondary:focus-visible {
   outline-color: var(--amber);
+}
+
+.coord-action-btn--consult-car:focus-visible {
+  outline-color: #2dd4bf;
 }
 
 .coord-upload-label {
@@ -4827,6 +4845,7 @@ body {
 .coord-action-btn--primary,
 .coord-action-btn--secondary,
 .coord-action-btn--manual,
+.coord-action-btn--consult-car,
 .coord-action-btn--success,
 .coord-action-btn--danger {
   color: #e6eef8;
@@ -4845,6 +4864,11 @@ body {
 .coord-action-btn--manual {
   background: linear-gradient(180deg, rgba(103, 199, 255, 0.16), rgba(103, 199, 255, 0.06));
   border-color: rgba(103, 199, 255, 0.2);
+}
+
+.coord-action-btn--consult-car {
+  background: linear-gradient(180deg, rgba(72, 221, 201, 0.16), rgba(72, 221, 201, 0.06));
+  border-color: rgba(72, 221, 201, 0.2);
 }
 
 .coord-action-btn--success {
@@ -6116,6 +6140,319 @@ input:focus-visible,
   opacity: 0.58;
 }
 
+.car-consult-modal {
+  max-width: 620px;
+}
+
+.car-consult-title-icon {
+  color: #99f6e4;
+  border-color: rgba(45, 212, 191, 0.28);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(153, 246, 228, 0.3), transparent 45%),
+    rgba(20, 184, 166, 0.12);
+}
+
+.car-consult-body {
+  gap: 16px;
+}
+
+.car-consult-field {
+  display: grid;
+  gap: 8px;
+}
+
+.car-consult-field span {
+  color: #d8ecf6;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.car-consult-field input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(15, 31, 56, 0.72), rgba(8, 18, 33, 0.86)),
+    rgba(6, 13, 24, 0.82);
+  color: #eef8ff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.4;
+  outline: none;
+  padding: 0 13px;
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    background var(--transition);
+}
+
+.car-consult-field input::placeholder {
+  color: rgba(148, 163, 184, 0.62);
+}
+
+.car-consult-field input:focus {
+  border-color: rgba(45, 212, 191, 0.5);
+  box-shadow:
+    0 0 0 1px rgba(45, 212, 191, 0.1),
+    0 0 30px rgba(20, 184, 166, 0.12);
+}
+
+.car-consult-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.42fr);
+  gap: 10px;
+}
+
+.car-consult-result {
+  display: grid;
+  gap: 13px;
+  padding: 14px;
+  border: 1px solid rgba(45, 212, 191, 0.2);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(13, 31, 53, 0.82), rgba(8, 18, 33, 0.92)),
+    radial-gradient(circle at top left, rgba(45, 212, 191, 0.12), transparent 44%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 34px rgba(0, 0, 0, 0.18);
+}
+
+.car-consult-result__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.car-consult-status,
+.car-consult-result__source {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  padding: 0 9px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.car-consult-status--active {
+  border-color: rgba(34, 197, 94, 0.38);
+  background: rgba(34, 197, 94, 0.13);
+  color: #bbf7d0;
+}
+
+.car-consult-status--pending {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.13);
+  color: #fde68a;
+}
+
+.car-consult-status--invalid {
+  border-color: rgba(239, 68, 68, 0.42);
+  background: rgba(239, 68, 68, 0.13);
+  color: #fecaca;
+}
+
+.car-consult-status--unknown {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.1);
+  color: #cbd5e1;
+}
+
+.car-consult-result__source {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.car-consult-code {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.car-consult-code span {
+  color: #8ab2c8;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.car-consult-code strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #f8fcff;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.car-consult-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.car-consult-metric {
+  display: grid;
+  gap: 5px;
+  min-height: 66px;
+  border: 1px solid rgba(125, 211, 252, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 10px;
+}
+
+.car-consult-metric--pending {
+  border-color: rgba(245, 158, 11, 0.18);
+  background: rgba(245, 158, 11, 0.07);
+}
+
+.car-consult-metric__label {
+  color: #8ab2c8;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.car-consult-metric__value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #eef8ff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.car-consult-metric__value-row {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+}
+
+.car-consult-info-btn {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+
+.car-consult-info-btn:hover,
+.car-consult-info-btn[aria-expanded="true"] {
+  border-color: rgba(245, 158, 11, 0.56);
+  background: rgba(245, 158, 11, 0.2);
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.16);
+}
+
+.car-consult-info-btn:focus-visible {
+  outline: 2px solid rgba(251, 191, 36, 0.46);
+  outline-offset: 2px;
+}
+
+.car-consult-info-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.car-consult-info-popover {
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(31, 26, 14, 0.94), rgba(17, 24, 39, 0.94)),
+    rgba(245, 158, 11, 0.08);
+  color: #f8e7bc;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.45;
+  margin-top: 4px;
+  padding: 9px 10px;
+}
+
+.car-consult-focus {
+  min-height: 38px;
+  border: 1px solid rgba(45, 212, 191, 0.32);
+  border-radius: 12px;
+  background: rgba(45, 212, 191, 0.12);
+  color: #ccfbf1;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    box-shadow var(--transition);
+}
+
+.car-consult-focus:hover {
+  border-color: rgba(45, 212, 191, 0.5);
+  background: rgba(45, 212, 191, 0.18);
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.12);
+}
+
+.car-consult-empty {
+  border: 1px dashed rgba(125, 211, 252, 0.16);
+  border-radius: 13px;
+  color: #9ab1c7;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 13px;
+}
+
+.car-consult-footer {
+  justify-content: flex-end;
+}
+
+.public-car-popup__status {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.public-car-popup__status--active {
+  border-color: rgba(34, 197, 94, 0.34);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.public-car-popup__status--pending {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.public-car-popup__status--invalid {
+  border-color: rgba(239, 68, 68, 0.34);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.public-car-popup__status--unknown {
+  border-color: rgba(148, 163, 184, 0.32);
+  background: rgba(148, 163, 184, 0.1);
+}
+
 /* Interface icon and spacing polish */
 .coord-panel .coord-actions-grid {
   grid-template-columns: 1fr;
@@ -6172,6 +6509,12 @@ input:focus-visible,
   color: #bae6fd;
   background: rgba(14, 165, 233, 0.14);
   border-color: rgba(14, 165, 233, 0.22);
+}
+
+.coord-action-btn--consult-car .coord-action-btn__icon {
+  color: #99f6e4;
+  background: rgba(45, 212, 191, 0.14);
+  border-color: rgba(45, 212, 191, 0.22);
 }
 
 .coord-action-btn--success .coord-action-btn__icon {
@@ -6770,6 +7113,16 @@ input:focus-visible,
   .manual-gleba-primary,
   .manual-gleba-secondary {
     width: 100%;
+  }
+
+  .car-consult-actions,
+  .car-consult-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .car-consult-result__head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

@@ -23,6 +23,20 @@ const funaiProxy = {
   rewrite: (path) => path.replace(/^\/funai-wms/, '/geoserver/Funai/wms'),
 }
 
+const carPublicApiProxy = {
+  target: 'https://consulta.car.gov.br',
+  changeOrigin: true,
+  secure: true,
+  rewrite: (path) => path.replace(/^\/car-public-api/, '/api'),
+}
+
+const carPublicWfsProxy = {
+  target: 'https://consulta.car.gov.br',
+  changeOrigin: true,
+  secure: true,
+  rewrite: (path) => path.replace(/^\/car-public-wfs/, '/geoserver/consulta_publica/ows'),
+}
+
 export default defineConfig({
   plugins: [tailwindcss(), react()],
   server: {
@@ -30,6 +44,8 @@ export default defineConfig({
       '/icmbio-wms': icmbioProxy,
       '/ibge-wms': ibgeProxy,
       '/funai-wms': funaiProxy,
+      '/car-public-api': carPublicApiProxy,
+      '/car-public-wfs': carPublicWfsProxy,
     },
   },
   preview: {
@@ -37,6 +53,8 @@ export default defineConfig({
       '/icmbio-wms': icmbioProxy,
       '/ibge-wms': ibgeProxy,
       '/funai-wms': funaiProxy,
+      '/car-public-api': carPublicApiProxy,
+      '/car-public-wfs': carPublicWfsProxy,
     },
   },
 })
