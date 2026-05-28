@@ -58,6 +58,7 @@ export default function App() {
     consultCarByRegistration,
     clearConsultedCar,
     focusConsultedCar,
+    focusConsultedEnvironmentalRestriction,
     validationResult,
     validateCoordinate,
     queryPoint,
@@ -282,6 +283,7 @@ export default function App() {
         onConsult={consultCarByRegistration}
         onClear={clearConsultedCar}
         onFocus={focusConsultedCar}
+        onFocusEnvironmental={focusConsultedEnvironmentalRestriction}
         consultedCar={consultedCar}
         error={carConsultationError}
         isLoading={isConsultingCar}

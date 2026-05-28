@@ -9,6 +9,13 @@ const icmbioProxy = {
   rewrite: (path) => path.replace(/^\/icmbio-wms/, '/geoserver/ICMBio/ows'),
 }
 
+const mmaProxy = {
+  target: 'https://geoservicos.inde.gov.br',
+  changeOrigin: true,
+  secure: true,
+  rewrite: (path) => path.replace(/^\/mma-wfs/, '/geoserver/MMA/wfs'),
+}
+
 const ibgeProxy = {
   target: 'https://geoservicos.ibge.gov.br',
   changeOrigin: true,
@@ -42,6 +49,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/icmbio-wms': icmbioProxy,
+      '/mma-wfs': mmaProxy,
       '/ibge-wms': ibgeProxy,
       '/funai-wms': funaiProxy,
       '/car-public-api': carPublicApiProxy,
@@ -51,6 +59,7 @@ export default defineConfig({
   preview: {
     proxy: {
       '/icmbio-wms': icmbioProxy,
+      '/mma-wfs': mmaProxy,
       '/ibge-wms': ibgeProxy,
       '/funai-wms': funaiProxy,
       '/car-public-api': carPublicApiProxy,

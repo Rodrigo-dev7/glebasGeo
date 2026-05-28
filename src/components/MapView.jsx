@@ -52,6 +52,7 @@ const BASEMAPS = {
 
 const ICMBIO_WMS_URL = 'https://geoservicos.inde.gov.br/geoserver/ICMBio/ows'
 const ICMBIO_WMS_PROXY_URL = '/icmbio-wms'
+const MMA_WFS_PROXY_URL = '/mma-wfs'
 const IBGE_WMS_URL = 'https://geoservicos.ibge.gov.br/geoserverIBGE/ows'
 const IBGE_WMS_PROXY_URL = '/ibge-wms'
 const FUNAI_WMS_URL = 'https://geoserver.funai.gov.br/geoserver/Funai/wms'
@@ -61,6 +62,12 @@ const ICMBIO_FEATURE_INFO_EVENT = 'icmbiofeatureinfo'
 const ICMBIO_UC_LEGEND = [
   { label: 'Protecao Integral', color: '#b9f34a', borderColor: '#3d5b1c' },
   { label: 'Uso Sustentavel', color: '#efb955', borderColor: '#6a4615' },
+]
+
+const MMA_CNUC_LEGEND = [
+  { label: 'UC Protecao Integral', color: '#ef4444', borderColor: '#fecaca' },
+  { label: 'UC Uso Sustentavel', color: '#f59e0b', borderColor: '#fde68a' },
+  { label: 'RPPN / outras reservas', color: '#22c55e', borderColor: '#bbf7d0' },
 ]
 
 const ICMBIO_AREA_PRIORITY_LEGEND = [
@@ -182,6 +189,18 @@ const FUNAI_TERRAS_INDIGENAS_WMS_LAYER = {
   legend: FUNAI_TI_LEGEND,
 }
 
+const MMA_CNUC_WMS_LAYER = {
+  key: 'reservas-brasil',
+  label: 'Reservas Brasil',
+  layers: 'cnuc_2026_03_atualizado',
+  wfsTypeName: 'MMA:cnuc_2026_03_atualizado',
+  sourceType: 'wfs-vector',
+  title: 'Unidades de Conservacao do Brasil - CNUC/MMA',
+  attribution: 'MMA / CNUC',
+  opacity: 0.62,
+  legend: MMA_CNUC_LEGEND,
+}
+
 const ICMBIO_WMS_LAYERS = [
   {
     key: 'all',
@@ -197,6 +216,7 @@ const ICMBIO_WMS_LAYERS = [
   },
   ICMBIO_NORTHEAST_PRIORITY_LAYER,
   ...ICMBIO_WMS_SOURCE_LAYERS,
+  MMA_CNUC_WMS_LAYER,
   IBGE_BIOMES_WMS_LAYER,
   FUNAI_TERRAS_INDIGENAS_WMS_LAYER,
 ]
@@ -211,6 +231,7 @@ const ICMBIO_LAYER_CONTROL_GROUPS = [
     items: [
       { layerKey: 'embargos', label: 'Embargos ICMBio', swatch: '#dc2626' },
       { layerKey: 'uc-federal', label: 'Unid. Conservacao', swatch: '#2f6f5e' },
+      { layerKey: 'reservas-brasil', label: 'Reservas Brasil', swatch: '#ef4444' },
       { layerKey: 'terras-indigenas', label: 'Terras Ind\u00edgenas', swatch: '#8b5cf6' },
       { layerKey: 'prioridades-nordeste', label: '\u00c1reas Priorit\u00e1rias NE', swatch: '#d99a31' },
       { layerKey: 'biomas', label: 'Bioma', swatch: '#315d86' },
@@ -230,6 +251,7 @@ const ICMBIO_LAYER_CONTROL_GROUPS = [
 
 const ICMBIO_QUERYABLE_LAYERS = [
   ...ICMBIO_WMS_SOURCE_LAYERS,
+  MMA_CNUC_WMS_LAYER,
   IBGE_BIOMES_WMS_LAYER,
   FUNAI_TERRAS_INDIGENAS_WMS_LAYER,
 ]
@@ -299,6 +321,26 @@ const ICMBIO_FEATURE_FIELD_LABELS = {
   imp: 'Importancia biologica',
   municipio: 'Municipio',
   n: 'Numero',
+  n2: 'Codigo MMA',
+  n3: 'Codigo auxiliar',
+  n4: 'Codigo cartografico',
+  n5: 'Codigo CNUC',
+  n6: 'Unidade de Conservacao',
+  n7: 'Data de criacao',
+  n8: 'Ato de criacao',
+  n10: 'Identificador',
+  n13: 'Base geografica',
+  n15: 'Area informada (ha)',
+  n17: 'Esfera',
+  n18: 'UF',
+  n19: 'Municipio',
+  n20: 'Orgao gestor',
+  n21: 'Grupo',
+  n22: 'Categoria',
+  n23: 'Categoria IUCN',
+  n26: 'Area calculada (ha)',
+  n31: 'Status',
+  n32: 'Tipo de limite',
   nome: 'Nome',
   nome_ti: 'Terra Indigena',
   nm_bioma: 'Bioma',
@@ -337,6 +379,20 @@ const ICMBIO_LAYER_FIELD_PRIORITY = {
     'criacaoato',
     'areahaalb',
     'demarcacao',
+  ],
+  cnuc_2026_03_atualizado: [
+    'n6',
+    'n10',
+    'n22',
+    'n21',
+    'n17',
+    'n18',
+    'n19',
+    'n20',
+    'n7',
+    'n8',
+    'n26',
+    'n31',
   ],
   embargos_icmbio: [
     'numero_emb',
@@ -661,6 +717,11 @@ const PUBLIC_CAR_STATUS_STYLES = {
     color: '#cbd5e1',
     fillColor: '#64748b',
   },
+}
+
+const ENVIRONMENTAL_RESTRICTION_STYLE = {
+  color: '#fecaca',
+  fillColor: '#ef4444',
 }
 
 const CAR_REFERENCE_ACTIVE_DATASET_STYLE = {
@@ -1205,6 +1266,7 @@ function getIcmbioFeatureTitle(feature, activeLayer) {
   return (
     properties.nomeuc ||
     properties.nome_uc ||
+    properties.n6 ||
     properties.nm_bioma ||
     properties.nome_area ||
     properties.nome_ap ||
@@ -1309,11 +1371,26 @@ function formatArea(area) {
   return typeof area === 'number' ? `${area} ha` : '-'
 }
 
+function formatEnvironmentalArea(area) {
+  const parsed = Number(String(area ?? '').replace(',', '.'))
+  if (!Number.isFinite(parsed)) return '-'
+
+  return `${parsed.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha`
+}
+
 function formatRelationList(relations = []) {
   return relations
     .map((relation) => relation.datasetName || relation.featureName || null)
     .filter(Boolean)
     .join(' | ')
+}
+
+function formatEnvironmentalValidationStatus(validation) {
+  if (validation?.status === 'overlap') return 'Sobreposicao com UC'
+  if (validation?.status === 'clear') return 'Sem sobreposicao com UC'
+  if (validation) return 'UC nao validada'
+
+  return null
 }
 
 const CAR_NUMBER_PROPERTY_ALIASES = [
@@ -1741,6 +1818,9 @@ function publicCarPopupMarkup(feature) {
     properties.municipio || '-',
     properties.uf || null,
   ].filter(Boolean).join(' / ')
+  const environmentalValidation = properties.environmentalValidation || null
+  const environmentalStatus = formatEnvironmentalValidationStatus(environmentalValidation)
+  const environmentalClass = environmentalValidation?.status || 'unknown'
 
   return `
     <div class="gleba-popup public-car-popup">
@@ -1768,9 +1848,136 @@ function publicCarPopupMarkup(feature) {
           <span class="pcell-label">Tipo</span>
           <span class="pcell-val">${escapeHtml(properties.tipo || '-')}</span>
         </div>
+        ${environmentalStatus ? `
+          <div class="popup-cell popup-cell--full public-car-popup__environment public-car-popup__environment--${escapeHtml(environmentalClass)}">
+            <span class="pcell-label">Unidade de Conservacao</span>
+            <span class="pcell-val">${escapeHtml(environmentalValidation.message || environmentalStatus)}</span>
+          </div>
+        ` : ''}
       </div>
     </div>
   `
+}
+
+function environmentalRestrictionPopupMarkup(feature) {
+  const properties = feature.properties || {}
+  const location = [
+    properties.municipio,
+    properties.uf,
+  ].filter(Boolean).join(' / ')
+
+  return `
+    <div class="gleba-popup public-car-popup environmental-popup">
+      <div class="popup-top">
+        <div class="popup-nome">Reserva ambiental</div>
+      </div>
+      <div class="popup-grid">
+        <div class="popup-cell popup-cell--full public-car-popup__environment public-car-popup__environment--overlap">
+          <span class="pcell-label">Unidade de Conservacao</span>
+          <span class="pcell-val">${escapeHtml(properties.nome || 'Unidade de Conservacao')}</span>
+        </div>
+        <div class="popup-cell">
+          <span class="pcell-label">Categoria</span>
+          <span class="pcell-val">${escapeHtml(properties.categoria || '-')}</span>
+        </div>
+        <div class="popup-cell">
+          <span class="pcell-label">Grupo</span>
+          <span class="pcell-val">${escapeHtml(properties.grupo || '-')}</span>
+        </div>
+        <div class="popup-cell popup-cell--full">
+          <span class="pcell-label">Municipio / UF</span>
+          <span class="pcell-val">${escapeHtml(location || '-')}</span>
+        </div>
+        <div class="popup-cell">
+          <span class="pcell-label">Area</span>
+          <span class="pcell-val">${escapeHtml(formatEnvironmentalArea(properties.area))}</span>
+        </div>
+        <div class="popup-cell">
+          <span class="pcell-label">Fonte</span>
+          <span class="pcell-val">${escapeHtml(properties.referenceType || 'CNUC/MMA')}</span>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+function environmentalRestrictionFeatureStyle(isHovered = false) {
+  return {
+    ...ENVIRONMENTAL_RESTRICTION_STYLE,
+    opacity: 1,
+    fillOpacity: isHovered ? 0.34 : 0.18,
+    weight: isHovered ? 4.4 : 3.2,
+    dashArray: '9 5',
+    lineCap: 'round',
+  }
+}
+
+function getCnucProperty(properties = {}, keys = []) {
+  for (const key of keys) {
+    const value = properties[key]
+    if (value !== null && value !== undefined && String(value).trim()) {
+      return value
+    }
+  }
+
+  return null
+}
+
+function normalizeCnucFeature(feature, index) {
+  const properties = feature?.properties || {}
+  const featureId =
+    feature?.id ||
+    getCnucProperty(properties, ['id', 'cnuc', 'codigo', 'n10', 'n5']) ||
+    `reserva-brasil-${index + 1}`
+
+  return {
+    type: 'Feature',
+    id: featureId,
+    properties: {
+      id: featureId,
+      nome: getCnucProperty(properties, ['nomeuc', 'nome_uc', 'nome', 'nome_area', 'n6']) || 'Unidade de Conservacao',
+      codigo: getCnucProperty(properties, ['cnuc', 'codigo', 'cod_uc', 'n10', 'n5']) || null,
+      categoria: getCnucProperty(properties, ['siglacateg', 'categoria', 'categori', 'n22']) || null,
+      grupo: getCnucProperty(properties, ['grupouc', 'grupo', 'grupo_uc', 'n21']) || null,
+      uf: getCnucProperty(properties, ['ufabrang', 'uf', 'n18']) || null,
+      municipio: getCnucProperty(properties, ['municipio', 'n19']) || null,
+      area: getCnucProperty(properties, ['areahaalb', 'area_ha', 'area', 'n26', 'n15']) || null,
+      referenceType: 'Unidade de Conservacao CNUC/MMA',
+      sourceType: 'conservation_unit',
+    },
+    geometry: feature.geometry,
+  }
+}
+
+function normalizeCnucFeatureCollection(geojson) {
+  return {
+    type: 'FeatureCollection',
+    features: (geojson?.features || [])
+      .filter((feature) => feature?.geometry)
+      .map(normalizeCnucFeature),
+  }
+}
+
+function buildCnucWfsUrl(bounds) {
+  const paddedBounds = bounds.pad(0.16)
+  const params = new URLSearchParams({
+    service: 'WFS',
+    version: '1.0.0',
+    request: 'GetFeature',
+    typeName: MMA_CNUC_WMS_LAYER.wfsTypeName,
+    outputFormat: 'application/json',
+    srsName: 'EPSG:4326',
+    maxFeatures: '3500',
+    bbox: [
+      paddedBounds.getWest(),
+      paddedBounds.getSouth(),
+      paddedBounds.getEast(),
+      paddedBounds.getNorth(),
+      'EPSG:4326',
+    ].join(','),
+  })
+
+  return `${MMA_WFS_PROXY_URL}?${params.toString()}`
 }
 
 function publicCarFeatureStyle(feature, isHovered = false) {
@@ -2831,10 +3038,13 @@ function PublicCarConsultationLayer({
     if (!featureGroupRef.current) return
 
     const features = consultedCar?.geojson?.features || []
+    const environmentalFeatures = consultedCar?.environmentalValidation?.geojson?.features || []
     const nextDatasetKey = [
       consultedCar?.code || 'sem-car',
       consultedCar?.fetchedAt || '',
       features.length,
+      environmentalFeatures.length,
+      consultedCar?.environmentalValidation?.validatedAt || '',
       consultedCar?.geometrySource || '',
     ].join('|')
 
@@ -2846,6 +3056,35 @@ function PublicCarConsultationLayer({
     featureGroupRef.current.clearLayers()
 
     if (!features.length) return
+
+    if (environmentalFeatures.length) {
+      const environmentalLayer = L.geoJSON(consultedCar.environmentalValidation.geojson, {
+        pane: 'environmental-reserve',
+        style: () => environmentalRestrictionFeatureStyle(false),
+        onEachFeature: (feature, layer) => {
+          layer.bindPopup(environmentalRestrictionPopupMarkup(feature), CAR_REFERENCE_POPUP_OPTIONS)
+
+          layer.on({
+            mouseover(event) {
+              event.target.setStyle(environmentalRestrictionFeatureStyle(true))
+              event.target.bringToFront()
+            },
+            mouseout(event) {
+              event.target.setStyle(environmentalRestrictionFeatureStyle(false))
+            },
+            click(event) {
+              if (event.originalEvent) {
+                L.DomEvent.stop(event.originalEvent)
+              }
+
+              layer.openPopup(event.latlng)
+            },
+          })
+        },
+      })
+
+      featureGroupRef.current.addLayer(environmentalLayer)
+    }
 
     const publicCarLayer = L.geoJSON(consultedCar.geojson, {
       pane: 'queried-car',
@@ -2880,19 +3119,156 @@ function PublicCarConsultationLayer({
 
     if (
       !viewportRequest ||
-      viewportRequest.type !== 'consulted-car' ||
+      !['consulted-car', 'consulted-car-environmental'].includes(viewportRequest.type) ||
       lastViewportRequestRef.current === requestKey
     ) {
       return
     }
 
-    const bounds = datasetBounds(consultedCar?.geojson)
+    const bounds = viewportRequest.type === 'consulted-car-environmental'
+      ? datasetBounds(consultedCar?.environmentalValidation?.geojson)
+      : datasetBounds(consultedCar?.geojson)
     if (bounds?.isValid()) {
       animateToBounds(leafMap, bounds, { maxZoom: 18, duration: 1.45, padding: [76, 76] })
     }
 
     lastViewportRequestRef.current = requestKey
   }, [consultedCar, leafMap, viewportRequest])
+
+  return null
+}
+
+function BrazilEnvironmentalReserveLayer({ active = false }) {
+  const leafMap = useMap()
+  const featureGroupRef = useRef(null)
+  const abortControllerRef = useRef(null)
+  const requestIdRef = useRef(0)
+  const lastRequestKeyRef = useRef(null)
+
+  useEffect(() => {
+    const featureGroup = L.featureGroup().addTo(leafMap)
+    featureGroupRef.current = featureGroup
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+      featureGroup.remove()
+      featureGroupRef.current = null
+    }
+  }, [leafMap])
+
+  useEffect(() => {
+    if (!featureGroupRef.current) return undefined
+
+    const renderFeatureCollection = (geojson) => {
+      if (!featureGroupRef.current) return
+
+      featureGroupRef.current.clearLayers()
+
+      const layer = L.geoJSON(geojson, {
+        pane: 'environmental-reserve',
+        style: () => environmentalRestrictionFeatureStyle(false),
+        onEachFeature: (feature, featureLayer) => {
+          featureLayer.bindPopup(environmentalRestrictionPopupMarkup(feature), CAR_REFERENCE_POPUP_OPTIONS)
+
+          featureLayer.on({
+            mouseover(event) {
+              event.target.setStyle(environmentalRestrictionFeatureStyle(true))
+              event.target.bringToFront()
+            },
+            mouseout(event) {
+              event.target.setStyle(environmentalRestrictionFeatureStyle(false))
+            },
+            click(event) {
+              if (event.originalEvent) {
+                L.DomEvent.stop(event.originalEvent)
+              }
+
+              featureLayer.openPopup(event.latlng)
+            },
+          })
+        },
+      })
+
+      featureGroupRef.current.addLayer(layer)
+    }
+
+    const loadVisibleReserves = async () => {
+      if (!active || !featureGroupRef.current) return
+
+      const bounds = leafMap.getBounds()
+      const requestKey = [
+        leafMap.getZoom(),
+        bounds.getWest().toFixed(2),
+        bounds.getSouth().toFixed(2),
+        bounds.getEast().toFixed(2),
+        bounds.getNorth().toFixed(2),
+      ].join('|')
+
+      if (lastRequestKeyRef.current === requestKey) return
+      lastRequestKeyRef.current = requestKey
+
+      requestIdRef.current += 1
+      const requestId = requestIdRef.current
+
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+
+      const abortController = new AbortController()
+      abortControllerRef.current = abortController
+
+      try {
+        const response = await fetch(buildCnucWfsUrl(bounds), {
+          credentials: 'omit',
+          signal: abortController.signal,
+          headers: {
+            Accept: 'application/json',
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error(`CNUC/MMA WFS HTTP ${response.status}`)
+        }
+
+        const geojson = normalizeCnucFeatureCollection(await response.json())
+        if (requestIdRef.current !== requestId) return
+
+        renderFeatureCollection(geojson)
+      } catch (error) {
+        if (error?.name === 'AbortError' || requestIdRef.current !== requestId) {
+          return
+        }
+
+        if (featureGroupRef.current) {
+          featureGroupRef.current.clearLayers()
+        }
+      }
+    }
+
+    if (!active) {
+      lastRequestKeyRef.current = null
+      featureGroupRef.current.clearLayers()
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+      return undefined
+    }
+
+    loadVisibleReserves()
+    leafMap.on('moveend zoomend', loadVisibleReserves)
+
+    return () => {
+      leafMap.off('moveend zoomend', loadVisibleReserves)
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+    }
+  }, [active, leafMap])
 
   return null
 }
@@ -3982,6 +4358,7 @@ function shouldShowDetailedMapForViewport(viewportRequest) {
     'car-reference',
     'car-feature',
     'consulted-car',
+    'consulted-car-environmental',
   ].includes(viewportRequest.type)
 }
 
@@ -4043,9 +4420,14 @@ export default function MapView({
     () => activeIcmbioLayerKeys.map((layerKey) => ICMBIO_WMS_LAYER_MAP.get(layerKey)).filter(Boolean),
     [activeIcmbioLayerKeys]
   )
-  const activeIcmbioFeatureInfoLayer = useMemo(
-    () => activeIcmbioLayers[activeIcmbioLayers.length - 1] || null,
+  const activeIcmbioWmsLayers = useMemo(
+    () => activeIcmbioLayers.filter((layer) => layer.sourceType !== 'wfs-vector'),
     [activeIcmbioLayers]
+  )
+  const isBrazilReservesLayerActive = activeIcmbioLayerKeys.includes('reservas-brasil')
+  const activeIcmbioFeatureInfoLayer = useMemo(
+    () => activeIcmbioWmsLayers[activeIcmbioWmsLayers.length - 1] || null,
+    [activeIcmbioWmsLayers]
   )
   const hasActiveIcmbioLayer = activeIcmbioLayers.length > 0
 
@@ -4195,6 +4577,7 @@ export default function MapView({
         <IcmbioFeatureInfoHandler activeLayer={activeIcmbioFeatureInfoLayer} />
         <Pane name="icmbio-wms" style={{ zIndex: 345 }} />
         <Pane name="car-reference" style={{ zIndex: 360 }} />
+        <Pane name="environmental-reserve" style={{ zIndex: 425 }} />
         <Pane name="queried-car" style={{ zIndex: 430 }} />
         <Pane name="gleba-layer" style={{ zIndex: 460 }} />
         <Pane name="gleba-points" style={{ zIndex: 620 }} />
@@ -4224,7 +4607,7 @@ export default function MapView({
           />
         )}
 
-        {activeIcmbioLayers.map((activeIcmbioLayer) => (
+        {activeIcmbioWmsLayers.map((activeIcmbioLayer) => (
           <WMSTileLayer
             key={activeIcmbioLayer.key}
             url={activeIcmbioLayer.url || ICMBIO_WMS_URL}
@@ -4240,6 +4623,8 @@ export default function MapView({
             attribution={activeIcmbioLayer.attribution || 'ICMBio / INDE'}
           />
         ))}
+
+        <BrazilEnvironmentalReserveLayer active={isBrazilReservesLayerActive} />
 
         <CarReferenceLayer
           carGeojson={carReferenceMapGeojson}

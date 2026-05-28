@@ -877,6 +877,17 @@ export function useGlebas() {
     return true
   }, [consultedCar])
 
+  const focusConsultedEnvironmentalRestriction = useCallback(() => {
+    if (!consultedCar?.environmentalValidation?.geojson?.features?.length) return false
+
+    setMapViewportRequest({
+      type: 'consulted-car-environmental',
+      carCode: consultedCar.code,
+      requestKey: `consulted-car-environmental-${consultedCar.code}-${Date.now()}`,
+    })
+    return true
+  }, [consultedCar])
+
   const clearConsultedCar = useCallback(() => {
     setConsultedCar(null)
     setCarConsultationError('')
@@ -1070,6 +1081,7 @@ export function useGlebas() {
     consultCarByRegistration,
     clearConsultedCar,
     focusConsultedCar,
+    focusConsultedEnvironmentalRestriction,
     validationResult,
     validateCoordinate,
     queryPoint,

@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/icmbio-wms",
+      "destination": "https://geoservicos.inde.gov.br/geoserver/ICMBio/ows"
+    },
+    {
+      "source": "/mma-wfs",
+      "destination": "https://geoservicos.inde.gov.br/geoserver/MMA/wfs"
+    },
+    {
       "source": "/car-public-api/:path*",
       "destination": "https://consulta.car.gov.br/api/:path*"
     },

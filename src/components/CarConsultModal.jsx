@@ -39,6 +39,25 @@ function formatArea(value) {
   return `${area.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha`
 }
 
+function getEnvironmentalTone(validation) {
+  if (validation?.status === 'overlap') return 'danger'
+  if (validation?.status === 'clear') return 'success'
+  return 'unknown'
+}
+
+function formatEnvironmentalStatus(validation) {
+  if (validation?.status === 'overlap') return 'Sobreposicao encontrada'
+  if (validation?.status === 'clear') return 'Sem sobreposicao'
+  return 'Validacao indisponivel'
+}
+
+function formatEnvironmentalMatch(match) {
+  return [
+    match?.nome,
+    match?.categoria,
+  ].filter(Boolean).join(' - ')
+}
+
 function ResultMetric({ label, value, tone, infoLabel = '', infoText = '' }) {
   const [isInfoOpen, setIsInfoOpen] = useState(false)
   const hasInfo = Boolean(infoText)
@@ -75,6 +94,7 @@ export default function CarConsultModal({
   onConsult,
   onClear,
   onFocus,
+  onFocusEnvironmental,
   consultedCar = null,
   error = '',
   isLoading = false,
@@ -137,6 +157,12 @@ export default function CarConsultModal({
     consultedCar?.municipio,
     consultedCar?.uf,
   ].filter(Boolean).join(' / ')
+  const environmentalValidation = consultedCar?.environmentalValidation || null
+  const environmentalTone = getEnvironmentalTone(environmentalValidation)
+  const environmentalMatches = environmentalValidation?.matches || []
+  const hasEnvironmentalOverlap =
+    environmentalValidation?.status === 'overlap' &&
+    environmentalValidation?.geojson?.features?.length > 0
 
   return (
     <div className="manual-gleba-overlay car-consult-overlay" role="presentation">
@@ -236,13 +262,44 @@ export default function CarConsultModal({
                 />
               </div>
 
-              <button
-                type="button"
-                className="car-consult-focus"
-                onClick={onFocus}
-              >
-                Centralizar no mapa
-              </button>
+              {environmentalValidation && (
+                <div className={`car-consult-environment car-consult-environment--${environmentalTone}`}>
+                  <div className="car-consult-environment__head">
+                    <span>Unidade de Conservacao</span>
+                    <strong>{formatEnvironmentalStatus(environmentalValidation)}</strong>
+                  </div>
+                  <p>{environmentalValidation.message}</p>
+                  {environmentalMatches.length > 0 && (
+                    <ul className="car-consult-environment__matches">
+                      {environmentalMatches.slice(0, 4).map((match, index) => (
+                        <li key={`${match.id || match.nome || 'uc'}-${index}`}>
+                          {formatEnvironmentalMatch(match)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              <div className="car-consult-focus-actions">
+                {hasEnvironmentalOverlap && (
+                  <button
+                    type="button"
+                    className="car-consult-focus car-consult-focus--environment"
+                    onClick={onFocusEnvironmental}
+                  >
+                    Mostrar reserva ambiental
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="car-consult-focus"
+                  onClick={onFocus}
+                >
+                  Centralizar CAR
+                </button>
+              </div>
             </div>
           ) : (
             <div className="car-consult-empty">

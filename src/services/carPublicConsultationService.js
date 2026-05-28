@@ -1,3 +1,5 @@
+import { validateConservationUnitOverlap } from './environmentalRestrictionService'
+
 const CAR_PUBLIC_API_BASE = '/car-public-api'
 const CAR_PUBLIC_WFS_BASE = '/car-public-wfs'
 
@@ -317,6 +319,24 @@ export async function consultPublicCarByCode(inputCarCode, options = {}) {
     throw new Error('O CAR foi encontrado, mas a geometria publica nao esta disponivel no momento.')
   }
 
+  let consultedGeojson = {
+    type: 'FeatureCollection',
+    features: sanitizedFeatures,
+  }
+  const environmentalValidation = await validateConservationUnitOverlap(consultedGeojson, {
+    signal: options.signal,
+  })
+  consultedGeojson = {
+    ...consultedGeojson,
+    features: consultedGeojson.features.map((feature) => ({
+      ...feature,
+      properties: {
+        ...(feature.properties || {}),
+        environmentalValidation,
+      },
+    })),
+  }
+
   const resolvedProperties = sanitizedFeatures[0].properties || publicProperties
 
   return {
@@ -330,10 +350,8 @@ export async function consultPublicCarByCode(inputCarCode, options = {}) {
     area: resolvedProperties.area,
     tipo: resolvedProperties.tipo,
     geometrySource: resolvedProperties.geometrySource,
+    environmentalValidation,
     fetchedAt: new Date().toISOString(),
-    geojson: {
-      type: 'FeatureCollection',
-      features: sanitizedFeatures,
-    },
+    geojson: consultedGeojson,
   }
 }
