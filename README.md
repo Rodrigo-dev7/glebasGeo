@@ -1,7 +1,7 @@
 
 # GlebasGEO
 
-Aplicacao web para validacao geoespacial de glebas, com mapa interativo, importacao de arquivos, edicao de vertices, cruzamento com bases CAR e exportacao de relatorio em Excel.
+Aplicação web para validação geoespacial de glebas, com mapa interativo, importacao de arquivos, edicao de vertices, cruzamento com bases CAR e exportacao de relatorio em Excel.
 
 <img width="1422" height="760" alt="screenshot-1779848370906" src="https://github.com/user-attachments/assets/04993ca3-b974-43da-b41a-8b2870d9d906" />
 
