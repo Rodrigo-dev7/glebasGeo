@@ -52,7 +52,8 @@ const BASEMAPS = {
 
 const ICMBIO_WMS_URL = 'https://geoservicos.inde.gov.br/geoserver/ICMBio/ows'
 const ICMBIO_WMS_PROXY_URL = '/icmbio-wms'
-const MMA_WFS_PROXY_URL = '/mma-wfs'
+const MMA_WMS_URL = 'https://geoservicos.inde.gov.br/geoserver/MMA/ows'
+const MMA_WMS_PROXY_URL = '/mma-wms'
 const IBGE_WMS_URL = 'https://geoservicos.ibge.gov.br/geoserverIBGE/ows'
 const IBGE_WMS_PROXY_URL = '/ibge-wms'
 const FUNAI_WMS_URL = 'https://geoserver.funai.gov.br/geoserver/Funai/wms'
@@ -192,10 +193,18 @@ const FUNAI_TERRAS_INDIGENAS_WMS_LAYER = {
 const MMA_CNUC_WMS_LAYER = {
   key: 'reservas-brasil',
   label: 'Reservas Brasil',
-  layers: 'cnuc_2026_03_atualizado',
+  layers: 'cnuc_2026_03',
   wfsTypeName: 'MMA:cnuc_2026_03_atualizado',
-  sourceType: 'wfs-vector',
-  title: 'Unidades de Conservacao do Brasil - CNUC/MMA',
+  title: 'Unidades de Conservacao do Brasil - CNUC/MMA (03/2026)',
+  url: MMA_WMS_URL,
+  proxyUrl: MMA_WMS_PROXY_URL,
+  version: '1.1.1',
+  crs: L.CRS.EPSG4326,
+  crsCode: 'EPSG:4326',
+  featureInfoVersion: '1.1.1',
+  featureInfoCrs: L.CRS.EPSG4326,
+  featureInfoCrsCode: 'EPSG:4326',
+  sourceLabel: 'MMA / CNUC',
   attribution: 'MMA / CNUC',
   opacity: 0.62,
   legend: MMA_CNUC_LEGEND,
@@ -379,6 +388,20 @@ const ICMBIO_LAYER_FIELD_PRIORITY = {
     'criacaoato',
     'areahaalb',
     'demarcacao',
+  ],
+  cnuc_2026_03: [
+    'n6',
+    'n10',
+    'n22',
+    'n21',
+    'n17',
+    'n18',
+    'n19',
+    'n20',
+    'n7',
+    'n8',
+    'n26',
+    'n31',
   ],
   cnuc_2026_03_atualizado: [
     'n6',
@@ -572,6 +595,7 @@ function IcmbioFeatureInfoHandler({ activeLayer }) {
       requestRef.current.popup = popup
 
       try {
+        const sourceLabel = getFeatureInfoSourceLabel(activeLayer)
         const response = await fetch(
           buildIcmbioFeatureInfoUrl(map, latlng, activeLayer),
           {
@@ -581,12 +605,12 @@ function IcmbioFeatureInfoHandler({ activeLayer }) {
         )
 
         if (!response.ok) {
-          throw new Error(`Consulta ICMBio retornou HTTP ${response.status}`)
+          throw new Error(`Consulta ${sourceLabel} retornou HTTP ${response.status}`)
         }
 
         const contentType = response.headers.get('content-type') || ''
         if (!contentType.includes('application/json')) {
-          throw new Error('O ICMBio nao retornou JSON para este ponto.')
+          throw new Error(`${sourceLabel} nao retornou JSON para este ponto.`)
         }
 
         const featureCollection = await response.json()
@@ -1146,31 +1170,52 @@ function getIcmbioFeatureInfoBaseUrl(activeLayer) {
   return activeLayer?.url || ICMBIO_WMS_URL
 }
 
+function getFeatureInfoSourceLabel(activeLayer) {
+  return activeLayer?.sourceLabel || activeLayer?.attribution || 'ICMBio'
+}
+
 function buildIcmbioFeatureInfoUrl(map, latlng, activeLayer) {
   const size = map.getSize()
   const clickPoint = map.latLngToContainerPoint(latlng).round()
   const bounds = map.getBounds()
-  const crs = map.options.crs || L.CRS.EPSG3857
-  const southWest = crs.project(bounds.getSouthWest())
-  const northEast = crs.project(bounds.getNorthEast())
+  const version = activeLayer?.featureInfoVersion || activeLayer?.version || '1.3.0'
+  const crs = activeLayer?.featureInfoCrs || activeLayer?.crs || map.options.crs || L.CRS.EPSG3857
+  const crsCode =
+    activeLayer?.featureInfoCrsCode ||
+    activeLayer?.crsCode ||
+    (crs === L.CRS.EPSG4326 ? 'EPSG:4326' : 'EPSG:3857')
+  const bbox = crs === L.CRS.EPSG4326
+    ? [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()].join(',')
+    : (() => {
+        const southWest = crs.project(bounds.getSouthWest())
+        const northEast = crs.project(bounds.getNorthEast())
+        return [southWest.x, southWest.y, northEast.x, northEast.y].join(',')
+      })()
   const params = new URLSearchParams({
     SERVICE: 'WMS',
-    VERSION: '1.3.0',
+    VERSION: version,
     REQUEST: 'GetFeatureInfo',
     FORMAT: 'image/png',
     TRANSPARENT: 'true',
     LAYERS: activeLayer.layers,
     QUERY_LAYERS: activeLayer.layers,
-    STYLES: '',
+    STYLES: activeLayer.styles || '',
     INFO_FORMAT: 'application/json',
     FEATURE_COUNT: String(ICMBIO_FEATURE_INFO_FEATURE_LIMIT),
-    CRS: 'EPSG:3857',
-    BBOX: [southWest.x, southWest.y, northEast.x, northEast.y].join(','),
+    BBOX: bbox,
     WIDTH: String(Math.round(size.x)),
     HEIGHT: String(Math.round(size.y)),
-    I: String(clickPoint.x),
-    J: String(clickPoint.y),
   })
+
+  if (version === '1.3.0') {
+    params.set('CRS', crsCode)
+    params.set('I', String(clickPoint.x))
+    params.set('J', String(clickPoint.y))
+  } else {
+    params.set('SRS', crsCode)
+    params.set('X', String(clickPoint.x))
+    params.set('Y', String(clickPoint.y))
+  }
 
   return `${getIcmbioFeatureInfoBaseUrl(activeLayer)}?${params.toString()}`
 }
@@ -1281,10 +1326,12 @@ function getIcmbioFeatureTitle(feature, activeLayer) {
 }
 
 function icmbioFeatureInfoLoadingMarkup(activeLayer) {
+  const sourceLabel = getFeatureInfoSourceLabel(activeLayer)
+
   return `
     <div class="icmbio-feature-popup">
       <div class="icmbio-feature-popup__top">
-        <span class="icmbio-feature-popup__eyebrow">ICMBio</span>
+        <span class="icmbio-feature-popup__eyebrow">${escapeHtml(sourceLabel)}</span>
         <strong>${escapeHtml(activeLayer?.label || 'Camada')}</strong>
       </div>
       <div class="icmbio-feature-popup__body">
@@ -1295,10 +1342,12 @@ function icmbioFeatureInfoLoadingMarkup(activeLayer) {
 }
 
 function icmbioFeatureInfoErrorMarkup(activeLayer, message) {
+  const sourceLabel = getFeatureInfoSourceLabel(activeLayer)
+
   return `
     <div class="icmbio-feature-popup">
       <div class="icmbio-feature-popup__top">
-        <span class="icmbio-feature-popup__eyebrow">ICMBio</span>
+        <span class="icmbio-feature-popup__eyebrow">${escapeHtml(sourceLabel)}</span>
         <strong>${escapeHtml(activeLayer?.label || 'Camada')}</strong>
       </div>
       <div class="icmbio-feature-popup__body">
@@ -1314,16 +1363,17 @@ function icmbioFeatureInfoPopupMarkup(activeLayer, featureCollection) {
   const features = Array.isArray(featureCollection?.features)
     ? featureCollection.features
     : []
+  const sourceLabel = getFeatureInfoSourceLabel(activeLayer)
 
   if (!features.length) {
     return `
       <div class="icmbio-feature-popup">
         <div class="icmbio-feature-popup__top">
-          <span class="icmbio-feature-popup__eyebrow">ICMBio</span>
+          <span class="icmbio-feature-popup__eyebrow">${escapeHtml(sourceLabel)}</span>
           <strong>${escapeHtml(activeLayer?.label || 'Camada')}</strong>
         </div>
         <div class="icmbio-feature-popup__body">
-          <div class="icmbio-feature-popup__empty">Nenhum registro ICMBio encontrado neste ponto.</div>
+          <div class="icmbio-feature-popup__empty">Nenhum registro encontrado neste ponto.</div>
         </div>
       </div>
     `
@@ -1357,7 +1407,7 @@ function icmbioFeatureInfoPopupMarkup(activeLayer, featureCollection) {
   return `
     <div class="icmbio-feature-popup">
       <div class="icmbio-feature-popup__top">
-        <span class="icmbio-feature-popup__eyebrow">ICMBio</span>
+        <span class="icmbio-feature-popup__eyebrow">${escapeHtml(sourceLabel)}</span>
         <strong>${escapeHtml(features.length === 1 ? '1 registro encontrado' : `${features.length} registros encontrados`)}</strong>
       </div>
       <div class="icmbio-feature-popup__body">
@@ -1910,74 +1960,6 @@ function environmentalRestrictionFeatureStyle(isHovered = false) {
     dashArray: '9 5',
     lineCap: 'round',
   }
-}
-
-function getCnucProperty(properties = {}, keys = []) {
-  for (const key of keys) {
-    const value = properties[key]
-    if (value !== null && value !== undefined && String(value).trim()) {
-      return value
-    }
-  }
-
-  return null
-}
-
-function normalizeCnucFeature(feature, index) {
-  const properties = feature?.properties || {}
-  const featureId =
-    feature?.id ||
-    getCnucProperty(properties, ['id', 'cnuc', 'codigo', 'n10', 'n5']) ||
-    `reserva-brasil-${index + 1}`
-
-  return {
-    type: 'Feature',
-    id: featureId,
-    properties: {
-      id: featureId,
-      nome: getCnucProperty(properties, ['nomeuc', 'nome_uc', 'nome', 'nome_area', 'n6']) || 'Unidade de Conservacao',
-      codigo: getCnucProperty(properties, ['cnuc', 'codigo', 'cod_uc', 'n10', 'n5']) || null,
-      categoria: getCnucProperty(properties, ['siglacateg', 'categoria', 'categori', 'n22']) || null,
-      grupo: getCnucProperty(properties, ['grupouc', 'grupo', 'grupo_uc', 'n21']) || null,
-      uf: getCnucProperty(properties, ['ufabrang', 'uf', 'n18']) || null,
-      municipio: getCnucProperty(properties, ['municipio', 'n19']) || null,
-      area: getCnucProperty(properties, ['areahaalb', 'area_ha', 'area', 'n26', 'n15']) || null,
-      referenceType: 'Unidade de Conservacao CNUC/MMA',
-      sourceType: 'conservation_unit',
-    },
-    geometry: feature.geometry,
-  }
-}
-
-function normalizeCnucFeatureCollection(geojson) {
-  return {
-    type: 'FeatureCollection',
-    features: (geojson?.features || [])
-      .filter((feature) => feature?.geometry)
-      .map(normalizeCnucFeature),
-  }
-}
-
-function buildCnucWfsUrl(bounds) {
-  const paddedBounds = bounds.pad(0.16)
-  const params = new URLSearchParams({
-    service: 'WFS',
-    version: '1.0.0',
-    request: 'GetFeature',
-    typeName: MMA_CNUC_WMS_LAYER.wfsTypeName,
-    outputFormat: 'application/json',
-    srsName: 'EPSG:4326',
-    maxFeatures: '3500',
-    bbox: [
-      paddedBounds.getWest(),
-      paddedBounds.getSouth(),
-      paddedBounds.getEast(),
-      paddedBounds.getNorth(),
-      'EPSG:4326',
-    ].join(','),
-  })
-
-  return `${MMA_WFS_PROXY_URL}?${params.toString()}`
 }
 
 function publicCarFeatureStyle(feature, isHovered = false) {
@@ -3138,141 +3120,6 @@ function PublicCarConsultationLayer({
   return null
 }
 
-function BrazilEnvironmentalReserveLayer({ active = false }) {
-  const leafMap = useMap()
-  const featureGroupRef = useRef(null)
-  const abortControllerRef = useRef(null)
-  const requestIdRef = useRef(0)
-  const lastRequestKeyRef = useRef(null)
-
-  useEffect(() => {
-    const featureGroup = L.featureGroup().addTo(leafMap)
-    featureGroupRef.current = featureGroup
-
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-        abortControllerRef.current = null
-      }
-      featureGroup.remove()
-      featureGroupRef.current = null
-    }
-  }, [leafMap])
-
-  useEffect(() => {
-    if (!featureGroupRef.current) return undefined
-
-    const renderFeatureCollection = (geojson) => {
-      if (!featureGroupRef.current) return
-
-      featureGroupRef.current.clearLayers()
-
-      const layer = L.geoJSON(geojson, {
-        pane: 'environmental-reserve',
-        style: () => environmentalRestrictionFeatureStyle(false),
-        onEachFeature: (feature, featureLayer) => {
-          featureLayer.bindPopup(environmentalRestrictionPopupMarkup(feature), CAR_REFERENCE_POPUP_OPTIONS)
-
-          featureLayer.on({
-            mouseover(event) {
-              event.target.setStyle(environmentalRestrictionFeatureStyle(true))
-              event.target.bringToFront()
-            },
-            mouseout(event) {
-              event.target.setStyle(environmentalRestrictionFeatureStyle(false))
-            },
-            click(event) {
-              if (event.originalEvent) {
-                L.DomEvent.stop(event.originalEvent)
-              }
-
-              featureLayer.openPopup(event.latlng)
-            },
-          })
-        },
-      })
-
-      featureGroupRef.current.addLayer(layer)
-    }
-
-    const loadVisibleReserves = async () => {
-      if (!active || !featureGroupRef.current) return
-
-      const bounds = leafMap.getBounds()
-      const requestKey = [
-        leafMap.getZoom(),
-        bounds.getWest().toFixed(2),
-        bounds.getSouth().toFixed(2),
-        bounds.getEast().toFixed(2),
-        bounds.getNorth().toFixed(2),
-      ].join('|')
-
-      if (lastRequestKeyRef.current === requestKey) return
-      lastRequestKeyRef.current = requestKey
-
-      requestIdRef.current += 1
-      const requestId = requestIdRef.current
-
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
-
-      const abortController = new AbortController()
-      abortControllerRef.current = abortController
-
-      try {
-        const response = await fetch(buildCnucWfsUrl(bounds), {
-          credentials: 'omit',
-          signal: abortController.signal,
-          headers: {
-            Accept: 'application/json',
-          },
-        })
-
-        if (!response.ok) {
-          throw new Error(`CNUC/MMA WFS HTTP ${response.status}`)
-        }
-
-        const geojson = normalizeCnucFeatureCollection(await response.json())
-        if (requestIdRef.current !== requestId) return
-
-        renderFeatureCollection(geojson)
-      } catch (error) {
-        if (error?.name === 'AbortError' || requestIdRef.current !== requestId) {
-          return
-        }
-
-        if (featureGroupRef.current) {
-          featureGroupRef.current.clearLayers()
-        }
-      }
-    }
-
-    if (!active) {
-      lastRequestKeyRef.current = null
-      featureGroupRef.current.clearLayers()
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-        abortControllerRef.current = null
-      }
-      return undefined
-    }
-
-    loadVisibleReserves()
-    leafMap.on('moveend zoomend', loadVisibleReserves)
-
-    return () => {
-      leafMap.off('moveend zoomend', loadVisibleReserves)
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-        abortControllerRef.current = null
-      }
-    }
-  }, [active, leafMap])
-
-  return null
-}
-
 function PointPopupContent({
   feature,
   coordinate,
@@ -4420,11 +4267,7 @@ export default function MapView({
     () => activeIcmbioLayerKeys.map((layerKey) => ICMBIO_WMS_LAYER_MAP.get(layerKey)).filter(Boolean),
     [activeIcmbioLayerKeys]
   )
-  const activeIcmbioWmsLayers = useMemo(
-    () => activeIcmbioLayers.filter((layer) => layer.sourceType !== 'wfs-vector'),
-    [activeIcmbioLayers]
-  )
-  const isBrazilReservesLayerActive = activeIcmbioLayerKeys.includes('reservas-brasil')
+  const activeIcmbioWmsLayers = activeIcmbioLayers
   const activeIcmbioFeatureInfoLayer = useMemo(
     () => activeIcmbioWmsLayers[activeIcmbioWmsLayers.length - 1] || null,
     [activeIcmbioWmsLayers]
@@ -4612,10 +4455,11 @@ export default function MapView({
             key={activeIcmbioLayer.key}
             url={activeIcmbioLayer.url || ICMBIO_WMS_URL}
             layers={activeIcmbioLayer.layers}
-            styles=""
+            styles={activeIcmbioLayer.styles || ''}
             format="image/png"
             transparent={true}
-            version="1.3.0"
+            version={activeIcmbioLayer.version || '1.3.0'}
+            crs={activeIcmbioLayer.crs}
             opacity={activeIcmbioLayer.opacity}
             className="icmbio-wms-tiles"
             pane="icmbio-wms"
@@ -4623,8 +4467,6 @@ export default function MapView({
             attribution={activeIcmbioLayer.attribution || 'ICMBio / INDE'}
           />
         ))}
-
-        <BrazilEnvironmentalReserveLayer active={isBrazilReservesLayerActive} />
 
         <CarReferenceLayer
           carGeojson={carReferenceMapGeojson}

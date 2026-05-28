@@ -9,6 +9,10 @@
       "destination": "https://geoservicos.inde.gov.br/geoserver/MMA/wfs"
     },
     {
+      "source": "/mma-wms",
+      "destination": "https://geoservicos.inde.gov.br/geoserver/MMA/ows"
+    },
+    {
       "source": "/car-public-api/:path*",
       "destination": "https://consulta.car.gov.br/api/:path*"
     },

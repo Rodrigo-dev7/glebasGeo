@@ -104,7 +104,7 @@ O painel **Analise Territorial** permite ativar camadas de apoio para leitura am
 - Biomas IBGE.
 - Camadas por bioma: Caatinga, Cerrado/Pantanal, Mata Atlantica, Amazonia e Zona Costeira.
 
-As camadas WMS permitem consulta por clique quando o servico publica `GetFeatureInfo`. A camada Reservas Brasil e carregada como vetor via WFS para exibir as reservas ambientais visiveis na area atual do mapa.
+As camadas WMS permitem consulta por clique quando o servico publica `GetFeatureInfo`. A camada Reservas Brasil usa WMS do CNUC/MMA para exibir as unidades de conservacao em escala nacional sem carregar a base vetorial inteira no navegador.
 
 ### Validacao por coordenada
 
@@ -206,6 +206,7 @@ O projeto usa proxies para evitar problemas de CORS nas consultas publicas usada
 - `/car-public-wfs` para WFS da consulta publica do CAR.
 - `/icmbio-wms` para camadas ICMBio.
 - `/mma-wfs` para base CNUC/MMA.
+- `/mma-wms` para visualizacao WMS do CNUC/MMA.
 - `/ibge-wms` para camadas IBGE.
 - `/funai-wms` para camadas FUNAI.
 
@@ -217,6 +218,7 @@ O arquivo `vercel.json` publica rewrites para os endpoints usados em producao:
 - `/car-public-wfs`
 - `/icmbio-wms`
 - `/mma-wfs`
+- `/mma-wms`
 
 ## Fluxo tecnico
 
@@ -348,7 +350,6 @@ Esses arquivos apoiam o enriquecimento de municipio e UF e a organizacao das bas
 - O build de producao pode emitir alerta de chunks grandes no Vite, mas a compilacao conclui normalmente.
 - Parte relevante da logica de mapa esta concentrada em `MapView.jsx`.
 - Servicos externos podem sofrer indisponibilidade, lentidao ou mudanca de schema.
-- A camada Reservas Brasil carrega dados via WFS conforme a area visivel do mapa, para evitar carregar a base nacional inteira de uma vez.
 
 ## Scripts disponiveis
 
