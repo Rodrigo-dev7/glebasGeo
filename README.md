@@ -2,7 +2,8 @@
 
 Aplicacao web para validacao geoespacial de glebas, analise territorial, consulta de CAR, cruzamento com bases ambientais e exportacao de relatorios em Excel.
 
-<img width="1422" height="760" alt="screenshot-1779848370906" src="https://github.com/user-attachments/assets/04993ca3-b974-43da-b41a-8b2870d9d906" />
+<img width="1432" height="766" alt="tela 1" src="https://github.com/user-attachments/assets/87f8c8f9-b08c-4c78-a40f-56b9d7259e65" />
+
 
 ## Visao geral
 
