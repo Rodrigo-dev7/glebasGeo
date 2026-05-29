@@ -283,8 +283,45 @@ async function buildCarReferenceDatasetFromImportItem(importItem) {
   })
 }
 
-function buildCarReferenceValidationDataset(datasets = []) {
-  const features = datasets.flatMap((dataset) =>
+function buildConsultedCarReferenceDataset(consultedCar) {
+  const features = consultedCar?.geojson?.features || []
+  if (!features.length) return null
+
+  const carCode = consultedCar.code || features[0]?.properties?.carCode || 'sem-codigo'
+
+  return {
+    datasetId: `consulted-car-${carCode}`,
+    geojson: {
+      ...consultedCar.geojson,
+      features: features.map((feature, index) => ({
+        ...feature,
+        properties: {
+          ...(feature.properties || {}),
+          id: feature.properties?.id || `consulted-car-${carCode}-${index + 1}`,
+          carCode: feature.properties?.carCode || carCode,
+        },
+      })),
+    },
+    metadata: {
+      fileName: `CAR consultado ${carCode}`,
+      sourceType: 'consulta_publica_car',
+      rowCount: features.length,
+      glebaCount: features.length,
+      datasetCount: 1,
+      carCode,
+      importedAt: consultedCar.fetchedAt || null,
+    },
+  }
+}
+
+function buildCarReferenceValidationDataset(datasets = [], consultedCar = null) {
+  const referenceDatasets = Array.isArray(datasets) ? datasets.filter(Boolean) : []
+  const consultedCarDataset = buildConsultedCarReferenceDataset(consultedCar)
+  const validationDatasets = consultedCarDataset
+    ? [...referenceDatasets, consultedCarDataset]
+    : referenceDatasets
+
+  const features = validationDatasets.flatMap((dataset) =>
     (dataset.geojson?.features || []).map((feature) => ({
       ...feature,
       properties: {
@@ -310,13 +347,13 @@ function buildCarReferenceValidationDataset(datasets = []) {
       features,
     },
     metadata: {
-      fileName: datasets.length === 1
-        ? datasets[0].metadata?.fileName || 'Base CAR/KML'
-        : `${datasets.length} bases CAR/KML`,
+      fileName: validationDatasets.length === 1
+        ? validationDatasets[0].metadata?.fileName || 'Base CAR/KML'
+        : `${validationDatasets.length} bases CAR/KML`,
       sourceType: 'car_reference_collection',
       rowCount: features.length,
       glebaCount: features.length,
-      datasetCount: datasets.length,
+      datasetCount: validationDatasets.length,
     },
   }
 }
@@ -352,8 +389,8 @@ export function useGlebas() {
   )
 
   const carReferenceValidationDataset = useMemo(
-    () => buildCarReferenceValidationDataset(carReferenceDatasetsWithContainment),
-    [carReferenceDatasetsWithContainment]
+    () => buildCarReferenceValidationDataset(carReferenceDatasetsWithContainment, consultedCar),
+    [carReferenceDatasetsWithContainment, consultedCar]
   )
 
   const selectedCarReferenceFeature = useMemo(
@@ -634,7 +671,7 @@ export function useGlebas() {
       setActiveCarReferenceDatasetId(nextCarDataset.datasetId)
       const defaultFeatureId = getSingleCarReferenceFeatureId(nextCarDataset)
       setSelectedCarReferenceFeatureId(defaultFeatureId)
-      syncCarValidationState(buildCarReferenceValidationDataset(nextCarDatasets))
+      syncCarValidationState(buildCarReferenceValidationDataset(nextCarDatasets, consultedCar))
       setMapViewportRequest(buildCarReferenceViewportRequest(nextCarDataset, defaultFeatureId))
 
       if (failedImports.length) {
@@ -649,7 +686,7 @@ export function useGlebas() {
     } finally {
       setIsImportingCar(false)
     }
-  }, [carReferenceDatasets, syncCarValidationState])
+  }, [carReferenceDatasets, consultedCar, syncCarValidationState])
 
   const selectCarReferenceDataset = useCallback((datasetId) => {
     const nextCarDataset = carReferenceDatasets.find((dataset) => dataset.datasetId === datasetId)
@@ -692,7 +729,7 @@ export function useGlebas() {
     if (removedWasActive) {
       setSelectedCarReferenceFeatureId(getSingleCarReferenceFeatureId(nextActiveCarDataset))
     }
-    syncCarValidationState(buildCarReferenceValidationDataset(remainingDatasets))
+    syncCarValidationState(buildCarReferenceValidationDataset(remainingDatasets, consultedCar))
 
     if (nextActiveCarDataset) {
       const defaultFeatureId = getSingleCarReferenceFeatureId(nextActiveCarDataset)
@@ -729,6 +766,7 @@ export function useGlebas() {
     activeCarReferenceDataset,
     activeCarReferenceDatasetId,
     carReferenceDatasets,
+    consultedCar,
     importedDataset,
     syncCarValidationState,
   ])
@@ -738,7 +776,7 @@ export function useGlebas() {
     setActiveCarReferenceDatasetId(null)
     setSelectedCarReferenceFeatureId(null)
     setCarImportError('')
-    syncCarValidationState(null)
+    syncCarValidationState(buildCarReferenceValidationDataset([], consultedCar))
 
     if (importedDataset?.geojson?.features?.length) {
       setMapViewportRequest({
@@ -752,7 +790,7 @@ export function useGlebas() {
       type: 'home',
       requestKey: `home-${Date.now()}`,
     })
-  }, [importedDataset, syncCarValidationState])
+  }, [consultedCar, importedDataset, syncCarValidationState])
 
   const clearImportedDataset = useCallback(() => {
     setImportedDataset(null)
@@ -850,6 +888,9 @@ export function useGlebas() {
     try {
       const result = await consultPublicCarByCode(carCode)
       setConsultedCar(result)
+      syncCarValidationState(
+        buildCarReferenceValidationDataset(carReferenceDatasetsWithContainment, result)
+      )
       setMapViewportRequest({
         type: 'consulted-car',
         carCode: result.code,
@@ -864,7 +905,7 @@ export function useGlebas() {
     } finally {
       setIsConsultingCar(false)
     }
-  }, [])
+  }, [carReferenceDatasetsWithContainment, syncCarValidationState])
 
   const focusConsultedCar = useCallback(() => {
     if (!consultedCar?.code) return false
@@ -891,6 +932,7 @@ export function useGlebas() {
   const clearConsultedCar = useCallback(() => {
     setConsultedCar(null)
     setCarConsultationError('')
+    syncCarValidationState(buildCarReferenceValidationDataset(carReferenceDatasetsWithContainment, null))
 
     if (importedDataset?.geojson?.features?.length) {
       setMapViewportRequest({
@@ -904,7 +946,7 @@ export function useGlebas() {
       type: 'home',
       requestKey: `home-${Date.now()}`,
     })
-  }, [importedDataset])
+  }, [carReferenceDatasetsWithContainment, importedDataset, syncCarValidationState])
 
   const toggleGlebaVisibility = useCallback((featureId) => {
     if (!featureId) return

@@ -262,6 +262,7 @@ function getFeatureName(feature, fallback = 'Imovel CAR') {
     properties.numero_car_recibo ||
     properties.codigo_imovel ||
     properties.cod_imovel ||
+    properties.carCode ||
     properties.car ||
     properties.id ||
     fallback
@@ -296,6 +297,7 @@ function resolveReferenceType(feature, metadata = null) {
     properties.numero_car_recibo ||
     properties.codigo_imovel ||
     properties.cod_imovel ||
+    properties.carCode ||
     sourceType.includes('car') ||
     sourceType.includes('shp')
   ) {
@@ -344,7 +346,7 @@ function summarizeCarFeature(feature, relation, metadata = null) {
   return {
     id: properties.id || null,
     nome: getFeatureName(feature),
-    codigo: properties.numero_car_recibo || properties.cod_imovel || properties.codigo_imovel || null,
+    codigo: properties.numero_car_recibo || properties.cod_imovel || properties.codigo_imovel || properties.carCode || null,
     datasetId: properties.__carDatasetId || metadata?.datasetId || null,
     datasetName: properties.__carDatasetName || properties.origem_arquivo || metadata?.fileName || null,
     layerKey: getLayerKey(feature),
