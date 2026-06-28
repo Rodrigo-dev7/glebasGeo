@@ -4240,6 +4240,9 @@ export default function MapView({
   const [mapZoom, setMapZoom] = useState(BRAZIL_ZOOM)
   const [isIntroActive, setIsIntroActive] = useState(true)
   const [isStartupGlobePinned, setIsStartupGlobePinned] = useState(true)
+  const [isTerritorialMapMode, setIsTerritorialMapMode] = useState(false)
+  const [territorialMapRevealKey, setTerritorialMapRevealKey] = useState(0)
+  const previousMapZoomRef = useRef(BRAZIL_ZOOM)
   const isGlobalGlobeMode = mapZoom <= 3
   const isGlobeVisible = isStartupGlobePinned || isIntroActive || isGlobalGlobeMode
   const selectedCarOverlapIds = useMemo(
@@ -4252,17 +4255,6 @@ export default function MapView({
       .filter(Boolean) || [],
     [selectedGleba]
   )
-  const carReferenceMapGeojson = useMemo(
-    () => buildCarReferenceMapGeojson(carReferenceDatasets),
-    [carReferenceDatasets]
-  )
-  const carReferenceFeatureCount = carReferenceMapGeojson.features?.length || 0
-  const shouldRenderGlobe =
-    isGlobeVisible && carReferenceFeatureCount <= GLOBE_CAR_FEATURE_LIMIT
-  const carReferenceMapKey = useMemo(
-    () => carReferenceDatasets.map((dataset) => dataset.datasetId).join('|'),
-    [carReferenceDatasets]
-  )
   const activeIcmbioLayers = useMemo(
     () => activeIcmbioLayerKeys.map((layerKey) => ICMBIO_WMS_LAYER_MAP.get(layerKey)).filter(Boolean),
     [activeIcmbioLayerKeys]
@@ -4273,6 +4265,19 @@ export default function MapView({
     [activeIcmbioWmsLayers]
   )
   const hasActiveIcmbioLayer = activeIcmbioLayers.length > 0
+  const carReferenceMapGeojson = useMemo(
+    () => buildCarReferenceMapGeojson(carReferenceDatasets),
+    [carReferenceDatasets]
+  )
+  const carReferenceFeatureCount = carReferenceMapGeojson.features?.length || 0
+  const shouldRenderGlobe =
+    !(isTerritorialMapMode && hasActiveIcmbioLayer) &&
+    isGlobeVisible &&
+    carReferenceFeatureCount <= GLOBE_CAR_FEATURE_LIMIT
+  const carReferenceMapKey = useMemo(
+    () => carReferenceDatasets.map((dataset) => dataset.datasetId).join('|'),
+    [carReferenceDatasets]
+  )
 
   const handlePointMarkerSelect = useCallback((feature, pointReference) => {
     setSelectedGleba(feature)
@@ -4323,20 +4328,25 @@ export default function MapView({
   const handleIcmbioLayerChange = useCallback((nextLayerKey) => {
     if (!nextLayerKey) {
       setActiveIcmbioLayerKeys([])
+      setIsTerritorialMapMode(false)
       return
     }
 
-    setActiveIcmbioLayerKeys((currentLayerKeys) => (
-      currentLayerKeys.includes(nextLayerKey)
-        ? currentLayerKeys.filter((layerKey) => layerKey !== nextLayerKey)
-        : [...currentLayerKeys, nextLayerKey]
-    ))
+    const nextLayerKeys = activeIcmbioLayerKeys.includes(nextLayerKey)
+      ? activeIcmbioLayerKeys.filter((layerKey) => layerKey !== nextLayerKey)
+      : [...activeIcmbioLayerKeys, nextLayerKey]
 
-    if (nextLayerKey) {
+    setActiveIcmbioLayerKeys(nextLayerKeys)
+
+    if (nextLayerKeys.length) {
       setIsIntroActive(false)
       setIsStartupGlobePinned(false)
+      setIsTerritorialMapMode(true)
+      setTerritorialMapRevealKey((currentKey) => currentKey + 1)
+    } else {
+      setIsTerritorialMapMode(false)
     }
-  }, [])
+  }, [activeIcmbioLayerKeys])
 
   const handleIcmbioControlToggle = useCallback(() => {
     setIsIcmbioControlCollapsed((current) => !current)
@@ -4356,6 +4366,17 @@ export default function MapView({
   }, [activeBasemap])
 
   useEffect(() => {
+    const previousMapZoom = previousMapZoomRef.current
+    previousMapZoomRef.current = mapZoom
+
+    if (!isTerritorialMapMode) return
+
+    if (previousMapZoom > 3 && mapZoom <= 3) {
+      setIsTerritorialMapMode(false)
+    }
+  }, [isTerritorialMapMode, mapZoom])
+
+  useEffect(() => {
     if (!viewportRequest) return
 
     if (shouldShowDetailedMapForViewport(viewportRequest)) {
@@ -4367,6 +4388,7 @@ export default function MapView({
     if (viewportRequest.type === 'home') {
       setIsIntroActive(false)
       setIsStartupGlobePinned(true)
+      setIsTerritorialMapMode(false)
     }
   }, [viewportRequest])
 
@@ -4414,7 +4436,7 @@ export default function MapView({
         doubleClickZoom={false}
         closePopupOnClick={false}
       >
-        <MapInvalidateOnLayout revision={layoutRevision} />
+        <MapInvalidateOnLayout revision={`${layoutRevision}-${shouldRenderGlobe}-${territorialMapRevealKey}`} />
         <MapInvalidateOnContainerResize />
         <MapZoomTracker onZoomChange={setMapZoom} />
         <IcmbioFeatureInfoHandler activeLayer={activeIcmbioFeatureInfoLayer} />
@@ -4452,7 +4474,7 @@ export default function MapView({
 
         {activeIcmbioWmsLayers.map((activeIcmbioLayer) => (
           <WMSTileLayer
-            key={activeIcmbioLayer.key}
+            key={`${activeIcmbioLayer.key}-${territorialMapRevealKey}`}
             url={activeIcmbioLayer.url || ICMBIO_WMS_URL}
             layers={activeIcmbioLayer.layers}
             styles={activeIcmbioLayer.styles || ''}
