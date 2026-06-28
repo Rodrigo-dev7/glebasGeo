@@ -28,6 +28,18 @@ function IconEye({ hidden = false }) {
   )
 }
 
+function IconTrash() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v5" />
+      <path d="M14 11v5" />
+    </svg>
+  )
+}
+
 function getCarValidationBadge(carValidation) {
   const primaryType = carValidation?.primaryMatch?.referenceType || carValidation?.referenceType || 'CAR/KML'
 
@@ -67,6 +79,7 @@ function GlebaAccordionCard({
   activeCoordinateIndex = null,
   onToggle,
   onVisibilityToggle,
+  onRemoveGleba,
   onCoordinateActivate,
 }) {
   const properties = gleba.properties || {}
@@ -74,6 +87,23 @@ function GlebaAccordionCard({
   const coordinateStatuses = properties.coordinateStatuses || []
   const carValidationBadge = getCarValidationBadge(properties.carOverlapValidation)
   const carValidationMatches = formatCarValidationMatches(properties.carOverlapValidation)
+
+  const handleVisibilityToggle = (event) => {
+    event.stopPropagation()
+    onVisibilityToggle?.(properties.id)
+  }
+
+  const handleRemoveGleba = (event) => {
+    event.stopPropagation()
+
+    const glebaName = properties.nome || 'esta gleba'
+    const confirmed = typeof window === 'undefined'
+      ? true
+      : window.confirm(`Remover ${glebaName}?`)
+
+    if (!confirmed) return
+    onRemoveGleba?.(properties.id)
+  }
 
   return (
     <article
@@ -109,16 +139,30 @@ function GlebaAccordionCard({
           </span>
         </button>
 
-        <button
-          type="button"
-          className={`gleba-visibility-toggle${isHidden ? ' is-hidden' : ''}`}
-          onClick={() => onVisibilityToggle?.(properties.id)}
-          aria-pressed={isHidden}
-          aria-label={isHidden ? `Mostrar ${properties.nome} no mapa` : `Ocultar ${properties.nome} no mapa`}
-          title={isHidden ? 'Mostrar no mapa' : 'Ocultar do mapa'}
-        >
-          <IconEye hidden={isHidden} />
-        </button>
+        <div className="gleba-card-actions">
+          <button
+            type="button"
+            className={`gleba-visibility-toggle${isHidden ? ' is-hidden' : ''}`}
+            onClick={handleVisibilityToggle}
+            aria-pressed={isHidden}
+            aria-label={isHidden ? `Mostrar ${properties.nome} no mapa` : `Ocultar ${properties.nome} no mapa`}
+            title={isHidden ? 'Mostrar no mapa' : 'Ocultar do mapa'}
+          >
+            <IconEye hidden={isHidden} />
+          </button>
+
+          {onRemoveGleba && (
+            <button
+              type="button"
+              className="gleba-delete-toggle"
+              onClick={handleRemoveGleba}
+              aria-label={`Excluir ${properties.nome}`}
+              title="Excluir gleba"
+            >
+              <IconTrash />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className={`gleba-accordion-content ${isExpanded ? 'is-open' : ''}`}>
@@ -210,6 +254,7 @@ export default function GlebaAccordionList({
   setSelectedGleba,
   hiddenFeatureIds = [],
   onVisibilityToggle,
+  onRemoveGleba,
   activeVertexReference = null,
   onActiveVertexChange,
   emptyMessage = 'Nenhuma gleba disponivel para o filtro atual.',
@@ -261,6 +306,14 @@ export default function GlebaAccordionList({
     )
   }
 
+  const handleRemoveGleba = (featureId) => {
+    const removed = onRemoveGleba?.(featureId)
+
+    if (removed !== false) {
+      setExpandedIds((current) => current.filter((id) => id !== featureId))
+    }
+  }
+
   if (!glebas.length) {
     return (
       <div className="sidebar-hint sidebar-hint--compact sidebar-hint--empty">
@@ -292,6 +345,7 @@ export default function GlebaAccordionList({
             }
             onToggle={() => handleToggle(gleba)}
             onVisibilityToggle={onVisibilityToggle}
+            onRemoveGleba={onRemoveGleba ? handleRemoveGleba : undefined}
             onCoordinateActivate={(coordinate, index) => (
               handleCoordinateActivate(gleba, coordinate, index)
             )}

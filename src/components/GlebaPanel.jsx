@@ -313,6 +313,7 @@ export default function GlebaPanel({
   gleba,
   activeCoordinateIndex = null,
   onActiveVertexChange,
+  onExportKml,
   onClose,
   titleId,
   showTabs = false,
@@ -355,6 +356,16 @@ export default function GlebaPanel({
             {properties.uf ? ` / ${properties.uf}` : ''}
           </strong>
         </div>
+
+        {onExportKml && (
+          <button
+            type="button"
+            className="panel-kml-export-btn"
+            onClick={() => onExportKml(gleba)}
+          >
+            Exportar KML
+          </button>
+        )}
 
         <div className="panel-edit-hint">
           Clique na gleba e arraste diretamente os pontos verdes ou vermelhos no mapa para redimensionar. A area, a validacao e a checagem contra o CAR sao recalculadas automaticamente.

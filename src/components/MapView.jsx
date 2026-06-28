@@ -883,7 +883,7 @@ function getVisibleCoordinateIndexes({
   const visibleIndexes = new Set([0, coordinates.length - 1])
 
   coordinateStatuses.forEach((coordinate, index) => {
-    if (coordinate?.isValid === false) {
+    if (coordinate?.isValid === false || coordinate?.issues?.length > 0 || coordinate?.hasWarning) {
       visibleIndexes.add(index)
     }
   })
@@ -892,7 +892,11 @@ function getVisibleCoordinateIndexes({
 }
 
 function coordinateHasOverlapIssue(coordinate) {
-  return coordinate?.issues?.some((issue) => issue.code === 'GEOMETRIA_SOBREPOSTA')
+  return coordinate?.issues?.some((issue) => (
+    issue.code === 'GEOMETRIA_SOBREPOSTA' ||
+    issue.code === 'VERTICES_PROXIMOS' ||
+    issue.code === 'VERTICES_COLAPSADOS'
+  ))
 }
 
 function coordinatesMatch(left, right, tolerance = COORDINATE_MATCH_TOLERANCE) {
@@ -1765,6 +1769,32 @@ function popupMarkup(feature, areaOverride = null) {
   `
 }
 
+function createGlebaPopupContent(feature, onExportFeature = null) {
+  const container = document.createElement('div')
+  container.innerHTML = popupMarkup(feature)
+  const content = container.firstElementChild || container
+
+  if (onExportFeature) {
+    const exportButton = document.createElement('button')
+    exportButton.type = 'button'
+    exportButton.className = 'popup-kml-export-btn'
+    exportButton.textContent = 'Exportar KML'
+    exportButton.title = 'Exportar esta gleba como arquivo KML'
+    exportButton.setAttribute('aria-label', 'Exportar esta gleba como arquivo KML')
+
+    L.DomEvent.disableClickPropagation(exportButton)
+    L.DomEvent.on(exportButton, 'click', (event) => {
+      L.DomEvent.preventDefault(event)
+      L.DomEvent.stopPropagation(event)
+      onExportFeature(feature)
+    })
+
+    content.appendChild(exportButton)
+  }
+
+  return content
+}
+
 function glebaReferenceTooltipMarkup(feature) {
   const carValidation = feature?.properties?.carOverlapValidation
 
@@ -2507,6 +2537,7 @@ function carReferenceDatasetLayerBounds(datasetId, featureLayers) {
 function GeoJSONLayer({
   glebas,
   onSelect,
+  onExportFeature,
   selectedId,
   matchedFeatureIds,
   visibleFeatureIds,
@@ -2575,7 +2606,7 @@ function GeoJSONLayer({
       onEachFeature: (feature, leafletLayer) => {
         const featureId = feature.properties.id
 
-        leafletLayer.bindPopup(popupMarkup(feature), PERSISTENT_POPUP_OPTIONS)
+        leafletLayer.bindPopup(createGlebaPopupContent(feature, onExportFeature), PERSISTENT_POPUP_OPTIONS)
         const relationTooltip = glebaReferenceTooltipMarkup(feature)
         if (relationTooltip) {
           leafletLayer.bindTooltip(relationTooltip, {
@@ -2613,7 +2644,7 @@ function GeoJSONLayer({
         featureLayersRef.current.set(featureId, leafletLayer)
       },
     })
-  }, [glebas, leafMap, onSelect])
+  }, [glebas, leafMap, onExportFeature, onSelect])
 
   useEffect(() => {
     if (!featureGroupRef.current) return
@@ -3133,6 +3164,14 @@ function PointPopupContent({
       ? coordinate.index - 1
       : null
   const roleLabel = describeCoordinateRole(feature, coordinate, resolvedDisplayIndex)
+  const hasWarning = coordinate?.issues?.some((issue) => issue.severity === 'warning')
+  const hasError = coordinate?.isValid === false ||
+    coordinate?.issues?.some((issue) => issue.severity !== 'warning')
+  const validationLabel = hasError
+    ? 'Coordenada com erro'
+    : hasWarning
+      ? 'Coordenada para revisar'
+      : 'Coordenada correta'
 
   return (
     <div className="validation-popup">
@@ -3141,7 +3180,7 @@ function PointPopupContent({
       {roleLabel && <span>{roleLabel}</span>}
       <span>Lat {Number.isFinite(lat) ? lat.toFixed(11) : '-'}</span>
       <span>Lon {Number.isFinite(lon) ? lon.toFixed(11) : '-'}</span>
-      <span>{coordinate?.isValid ? 'Coordenada correta' : 'Coordenada com erro'}</span>
+      <span>{validationLabel}</span>
       {coordinate?.issues?.map((issue, index) => (
         <span key={`${coordinate?.index || 'point'}-issue-${index}`}>{issue.message}</span>
       ))}
@@ -4229,6 +4268,7 @@ export default function MapView({
   layoutRevision = 0,
   pointDisplayMode = 'marked',
   consultedCar = null,
+  onExportGlebaKml,
 }) {
   const selectedId = selectedGleba?.properties?.id
   const [draggingFeatureId, setDraggingFeatureId] = useState(null)
@@ -4509,6 +4549,7 @@ export default function MapView({
         <GeoJSONLayer
           glebas={glebas}
           onSelect={setSelectedGleba}
+          onExportFeature={onExportGlebaKml}
           selectedId={selectedId}
           matchedFeatureIds={matchedFeatureIds}
           visibleFeatureIds={visibleFeatureIds}

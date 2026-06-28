@@ -9,6 +9,7 @@ import { importDatasetFiles } from '../services/datasetImportService'
 import { validateCoordinateAgainstDataset } from '../services/coordinateValidationService'
 import { buildValidationReport, downloadValidationReport } from '../services/reportService'
 import { parseCarReferenceFile } from '../services/kmlGeoService'
+import { downloadGlebaKml } from '../services/kmlExportService'
 import { parseManualGlebaText } from '../services/manualGlebaTextService'
 import { normalizeCarReferenceDataset } from '../services/carReferenceFeatureService'
 import { analyzeCarReferenceContainment } from '../services/carContainmentAnalysisService'
@@ -1084,6 +1085,18 @@ export function useGlebas() {
     downloadValidationReport(report)
   }, [activeCarReferenceDataset, importedDataset, queryPoint, stats, validationResult])
 
+  const exportGlebaKml = useCallback((feature = selectedGleba) => {
+    if (!feature) return
+
+    try {
+      downloadGlebaKml(feature)
+    } catch (error) {
+      if (typeof window !== 'undefined') {
+        window.alert(error?.message || 'Nao foi possivel exportar esta gleba em KML.')
+      }
+    }
+  }, [selectedGleba])
+
   return {
     glebas: filteredData,
     allGlebas: activeDataset,
@@ -1128,6 +1141,7 @@ export function useGlebas() {
     validateCoordinate,
     queryPoint,
     exportReport,
+    exportGlebaKml,
     matchedFeatureIds,
     mapViewportRequest,
     updateFeatureCoordinates,

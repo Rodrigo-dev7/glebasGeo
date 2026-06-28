@@ -1,10 +1,20 @@
 const TOLERANCE = 1e-10
+const EARTH_RADIUS_METERS = 6371008.8
+const NEAR_VERTEX_TOLERANCE_METERS = 3
+const NEAR_VERTEX_MIN_SEQUENCE_GAP = 10
+const LOCAL_VERTEX_COLLAPSE_TOLERANCE_METERS = 3
+const LOCAL_VERTEX_COLLAPSE_SPAN_METERS = 6
 
 const SICOR_ERRORS = {
   INVALID_AREA: 'SICOR: A gleba informada nao corresponde a uma area valida.',
   INVALID_AREA_EXTRA_REPEATS: 'SICOR: A gleba informada nao corresponde a uma area valida. O primeiro ponto foi repetido mais de duas vezes.',
   INVALID_AREA_MISSING_REPEAT: 'SICOR: A gleba informada nao corresponde a uma area valida. O ultimo ponto deve repetir exatamente o primeiro ponto.',
   SELF_OVERLAP: 'SICOR: A gleba informada possui sobreposicao no perimetro ou vertices coincidentes.',
+}
+
+const SICOR_WARNINGS = {
+  NEAR_VERTICES: `SICOR: Existem vertices quase coincidentes em trechos diferentes do perimetro. Verifique possivel sobreposicao, estrangulamento ou retorno da linha sobre a propria gleba.`,
+  LOCAL_VERTEX_COLLAPSE: `SICOR: Existem vertices consecutivos praticamente sobrepostos. Verifique possivel ponto duplicado ou micro-retorno no perimetro.`,
 }
 
 function nearlyEqual(left, right, tolerance = TOLERANCE) {
@@ -14,6 +24,43 @@ function nearlyEqual(left, right, tolerance = TOLERANCE) {
 function coordinatesEqual(left, right, tolerance = TOLERANCE) {
   if (!left || !right) return false
   return nearlyEqual(left[0], right[0], tolerance) && nearlyEqual(left[1], right[1], tolerance)
+}
+
+function toRadians(value) {
+  return (Number(value) * Math.PI) / 180
+}
+
+function haversineDistanceMeters(left, right) {
+  const [leftLon, leftLat] = left
+  const [rightLon, rightLat] = right
+
+  if (
+    !Number.isFinite(leftLon) ||
+    !Number.isFinite(leftLat) ||
+    !Number.isFinite(rightLon) ||
+    !Number.isFinite(rightLat)
+  ) {
+    return Infinity
+  }
+
+  const deltaLat = toRadians(rightLat - leftLat)
+  const deltaLon = toRadians(rightLon - leftLon)
+  const leftLatRad = toRadians(leftLat)
+  const rightLatRad = toRadians(rightLat)
+  const haversine =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(leftLatRad) * Math.cos(rightLatRad) * Math.sin(deltaLon / 2) ** 2
+
+  return 2 * EARTH_RADIUS_METERS * Math.atan2(
+    Math.sqrt(haversine),
+    Math.sqrt(Math.max(0, 1 - haversine))
+  )
+}
+
+function formatDistanceMeters(distanceMeters) {
+  if (!Number.isFinite(distanceMeters)) return null
+
+  return `${distanceMeters.toFixed(distanceMeters < 10 ? 2 : 1)} m`
 }
 
 function normalizeCoordinates(coordinates = []) {
@@ -142,6 +189,165 @@ function collectRepeatedVertexGroups(originalCoordinates = []) {
     .map((indexes) => [...indexes].sort((left, right) => left - right))
 }
 
+function collectNearVertexGroups(
+  originalCoordinates = [],
+  toleranceMeters = NEAR_VERTEX_TOLERANCE_METERS
+) {
+  const normalized = normalizeCoordinates(originalCoordinates)
+  const isClosed = normalized.length > 1 &&
+    coordinatesEqual(normalized[0], normalized[normalized.length - 1])
+  const analysisCoordinates = isClosed ? normalized.slice(0, -1) : normalized
+  const parents = analysisCoordinates.map((_, index) => index)
+  const ranks = analysisCoordinates.map(() => 0)
+  const pairIndexes = new Set()
+  const nearPairs = []
+
+  const getSequenceGap = (leftIndex, rightIndex) => {
+    const gap = Math.abs(rightIndex - leftIndex)
+
+    return isClosed
+      ? Math.min(gap, analysisCoordinates.length - gap)
+      : gap
+  }
+
+  const find = (index) => {
+    if (parents[index] !== index) {
+      parents[index] = find(parents[index])
+    }
+
+    return parents[index]
+  }
+
+  const union = (leftIndex, rightIndex) => {
+    const leftRoot = find(leftIndex)
+    const rightRoot = find(rightIndex)
+
+    if (leftRoot === rightRoot) return
+
+    if (ranks[leftRoot] < ranks[rightRoot]) {
+      parents[leftRoot] = rightRoot
+      return
+    }
+
+    if (ranks[leftRoot] > ranks[rightRoot]) {
+      parents[rightRoot] = leftRoot
+      return
+    }
+
+    parents[rightRoot] = leftRoot
+    ranks[leftRoot] += 1
+  }
+
+  for (let leftIndex = 0; leftIndex < analysisCoordinates.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < analysisCoordinates.length; rightIndex += 1) {
+      if (getSequenceGap(leftIndex, rightIndex) <= NEAR_VERTEX_MIN_SEQUENCE_GAP) {
+        continue
+      }
+
+      const distanceMeters = haversineDistanceMeters(
+        analysisCoordinates[leftIndex],
+        analysisCoordinates[rightIndex]
+      )
+
+      if (distanceMeters > toleranceMeters) {
+        continue
+      }
+
+      pairIndexes.add(leftIndex)
+      pairIndexes.add(rightIndex)
+      union(leftIndex, rightIndex)
+      nearPairs.push({
+        leftIndex,
+        rightIndex,
+        distanceMeters: Number(distanceMeters.toFixed(3)),
+      })
+    }
+  }
+
+  const groupsByRoot = new Map()
+
+  pairIndexes.forEach((index) => {
+    const root = find(index)
+    if (!groupsByRoot.has(root)) {
+      groupsByRoot.set(root, [])
+    }
+
+    groupsByRoot.get(root).push(index)
+  })
+
+  const groups = [...groupsByRoot.values()]
+    .map((indexes) => indexes.sort((left, right) => left - right))
+    .sort((left, right) => left[0] - right[0])
+
+  return {
+    groups,
+    indexes: [...pairIndexes].sort((left, right) => left - right),
+    pairs: nearPairs.sort((left, right) => left.leftIndex - right.leftIndex || left.rightIndex - right.rightIndex),
+  }
+}
+
+function collectLocalVertexCollapseGroups(
+  originalCoordinates = [],
+  toleranceMeters = LOCAL_VERTEX_COLLAPSE_TOLERANCE_METERS,
+  spanMeters = LOCAL_VERTEX_COLLAPSE_SPAN_METERS
+) {
+  const normalized = normalizeCoordinates(originalCoordinates)
+  const isClosed = normalized.length > 1 &&
+    coordinatesEqual(normalized[0], normalized[normalized.length - 1])
+  const analysisCoordinates = isClosed ? normalized.slice(0, -1) : normalized
+  const indexes = new Set()
+  const pairs = []
+  const groups = []
+
+  for (let index = 1; index < analysisCoordinates.length - 1; index += 1) {
+    const previousIndex = index - 1
+    const nextIndex = index + 1
+    const previousDistance = haversineDistanceMeters(
+      analysisCoordinates[previousIndex],
+      analysisCoordinates[index]
+    )
+    const nextDistance = haversineDistanceMeters(
+      analysisCoordinates[index],
+      analysisCoordinates[nextIndex]
+    )
+    const spanDistance = haversineDistanceMeters(
+      analysisCoordinates[previousIndex],
+      analysisCoordinates[nextIndex]
+    )
+
+    if (
+      previousDistance > toleranceMeters ||
+      nextDistance > toleranceMeters ||
+      spanDistance > spanMeters
+    ) {
+      continue
+    }
+
+    indexes.add(previousIndex)
+    indexes.add(index)
+    indexes.add(nextIndex)
+    groups.push([previousIndex, index, nextIndex])
+    pairs.push(
+      {
+        leftIndex: previousIndex,
+        rightIndex: index,
+        distanceMeters: Number(previousDistance.toFixed(3)),
+      },
+      {
+        leftIndex: index,
+        rightIndex: nextIndex,
+        distanceMeters: Number(nextDistance.toFixed(3)),
+      }
+    )
+  }
+
+  return {
+    groups,
+    indexes: [...indexes].sort((left, right) => left - right),
+    pairs: pairs.sort((left, right) => left.leftIndex - right.leftIndex || left.rightIndex - right.rightIndex),
+  }
+}
+
 function detectSelfOverlap(originalCoordinates = [], displayCoordinates = []) {
   const originalLength = originalCoordinates.length
   const closedDisplay = ensureClosedRing(displayCoordinates)
@@ -210,14 +416,26 @@ function buildCoordinateStatuses(originalCoordinates, validationIssues = []) {
   const issuesByIndex = new Map()
 
   validationIssues.forEach((issue) => {
-    issue.indexes.forEach((index) => {
+    ;(issue.indexes || []).forEach((index) => {
       if (!issuesByIndex.has(index)) {
         issuesByIndex.set(index, [])
       }
 
+      const relatedPairs = (issue.pairs || []).filter((pair) => (
+        pair.leftIndex === index || pair.rightIndex === index
+      ))
+      const nearestDistanceMeters = relatedPairs.length
+        ? Math.min(...relatedPairs.map((pair) => pair.distanceMeters))
+        : null
+      const distanceLabel = formatDistanceMeters(nearestDistanceMeters)
+
       issuesByIndex.get(index).push({
         code: issue.code,
-        message: issue.message,
+        message: distanceLabel
+          ? `${issue.message} Menor distancia encontrada: ${distanceLabel}.`
+          : issue.message,
+        severity: issue.severity || 'error',
+        nearestDistanceMeters,
       })
     })
   })
@@ -229,7 +447,9 @@ function buildCoordinateStatuses(originalCoordinates, validationIssues = []) {
       index: index + 1,
       lat: coordinate[1],
       lon: coordinate[0],
-      isValid: issues.length === 0,
+      isValid: !issues.some((issue) => issue.severity !== 'warning'),
+      hasWarning: issues.some((issue) => issue.severity === 'warning'),
+      hasError: issues.some((issue) => issue.severity !== 'warning'),
       issues,
       isFirst: index === 0,
       isLast: index === lastIndex,
@@ -323,6 +543,42 @@ export function validateSicorPolygon({ originalCoordinates, displayCoordinates }
     })
   }
 
+  const nearVertexAnalysis = collectNearVertexGroups(normalizedOriginalCoordinates)
+
+  if (nearVertexAnalysis.indexes.length) {
+    warnings.push({
+      code: 'VERTICES_PROXIMOS',
+      label: 'Vertices proximos',
+      message: SICOR_WARNINGS.NEAR_VERTICES,
+    })
+
+    validationIssues.push({
+      code: 'VERTICES_PROXIMOS',
+      message: SICOR_WARNINGS.NEAR_VERTICES,
+      severity: 'warning',
+      indexes: nearVertexAnalysis.indexes,
+      pairs: nearVertexAnalysis.pairs,
+    })
+  }
+
+  const localVertexCollapseAnalysis = collectLocalVertexCollapseGroups(normalizedOriginalCoordinates)
+
+  if (localVertexCollapseAnalysis.indexes.length) {
+    warnings.push({
+      code: 'VERTICES_COLAPSADOS',
+      label: 'Vertices consecutivos sobrepostos',
+      message: SICOR_WARNINGS.LOCAL_VERTEX_COLLAPSE,
+    })
+
+    validationIssues.push({
+      code: 'VERTICES_COLAPSADOS',
+      message: SICOR_WARNINGS.LOCAL_VERTEX_COLLAPSE,
+      severity: 'warning',
+      indexes: localVertexCollapseAnalysis.indexes,
+      pairs: localVertexCollapseAnalysis.pairs,
+    })
+  }
+
   return {
     errors,
     warnings,
@@ -338,6 +594,16 @@ export function validateSicorPolygon({ originalCoordinates, displayCoordinates }
       validationCause: validationCause?.code || null,
       repeatedVertexGroups,
       repeatedVertexIndexes,
+      nearVertexToleranceMeters: NEAR_VERTEX_TOLERANCE_METERS,
+      nearVertexMinSequenceGap: NEAR_VERTEX_MIN_SEQUENCE_GAP,
+      nearVertexGroups: nearVertexAnalysis.groups,
+      nearVertexIndexes: nearVertexAnalysis.indexes,
+      nearVertexPairs: nearVertexAnalysis.pairs,
+      localVertexCollapseToleranceMeters: LOCAL_VERTEX_COLLAPSE_TOLERANCE_METERS,
+      localVertexCollapseSpanMeters: LOCAL_VERTEX_COLLAPSE_SPAN_METERS,
+      localVertexCollapseGroups: localVertexCollapseAnalysis.groups,
+      localVertexCollapseIndexes: localVertexCollapseAnalysis.indexes,
+      localVertexCollapsePairs: localVertexCollapseAnalysis.pairs,
       selfOverlapVertexIndexes: selfOverlapIndexes,
       selfOverlapSegments: selfOverlap.overlapSegments,
       selfOverlapPairs: selfOverlap.overlapPairs,

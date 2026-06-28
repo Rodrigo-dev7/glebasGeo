@@ -63,6 +63,7 @@ export default function App() {
     validateCoordinate,
     queryPoint,
     exportReport,
+    exportGlebaKml,
     matchedFeatureIds,
     visibleFeatureIds,
     hiddenFeatureIds,
@@ -192,6 +193,7 @@ export default function App() {
           validationResult={validationResult}
           validateCoordinate={validateCoordinate}
           exportReport={exportReport}
+          exportGlebaKml={exportGlebaKml}
           sidebarCollapsed={!isSidebarVisible}
           onSidebarCollapsedChange={(nextCollapsed) => {
             if (typeof nextCollapsed === 'boolean') {
@@ -235,6 +237,7 @@ export default function App() {
             layoutRevision={`${isSidebarVisible}-${isMapHeaderCollapsed}`}
             pointDisplayMode={pointDisplayMode}
             consultedCar={consultedCar}
+            onExportGlebaKml={exportGlebaKml}
           />
         </main>
 

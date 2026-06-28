@@ -914,16 +914,25 @@ body.is-resizing-sidebar .map-area {
   background: rgba(15, 31, 56, 0.72);
 }
 
-.gleba-visibility-toggle {
+.gleba-card-actions {
+  display: flex;
+  flex-shrink: 0;
+  border-left: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.gleba-visibility-toggle,
+.gleba-delete-toggle {
   width: 42px;
   border: 0;
-  border-left: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(15, 31, 56, 0.28);
-  color: #a8d7ff;
   display: grid;
   place-items: center;
   cursor: pointer;
   transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+
+.gleba-visibility-toggle {
+  color: #a8d7ff;
 }
 
 .gleba-visibility-toggle:hover {
@@ -931,12 +940,23 @@ body.is-resizing-sidebar .map-area {
   color: #e0f2fe;
 }
 
+.gleba-delete-toggle {
+  border-left: 1px solid rgba(148, 163, 184, 0.12);
+  color: #fca5a5;
+}
+
+.gleba-delete-toggle:hover {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fee2e2;
+}
+
 .gleba-visibility-toggle.is-hidden {
   color: #94a3b8;
   background: rgba(15, 23, 42, 0.72);
 }
 
-.gleba-visibility-toggle:focus-visible {
+.gleba-visibility-toggle:focus-visible,
+.gleba-delete-toggle:focus-visible {
   outline: 2px solid rgba(56, 189, 248, 0.72);
   outline-offset: -2px;
 }
@@ -1298,6 +1318,31 @@ body.is-resizing-sidebar .map-area {
   font-size: 15px;
   line-height: 1.35;
   color: #d8f1ff;
+}
+
+.panel-kml-export-btn {
+  min-height: 38px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, 0.18), rgba(56, 189, 248, 0.06)),
+    rgba(8, 18, 33, 0.72);
+  color: #d8f1ff;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: background var(--transition), border-color var(--transition), color var(--transition), transform var(--transition);
+}
+
+.panel-kml-export-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(56, 189, 248, 0.48);
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, 0.24), rgba(56, 189, 248, 0.08)),
+    rgba(8, 18, 33, 0.88);
+  color: #ffffff;
 }
 
 .panel-edit-hint {
@@ -3924,6 +3969,27 @@ body.is-resizing-sidebar .map-area {
   font-size: 11px;
   line-height: 1.45;
   letter-spacing: 0.01em;
+}
+
+.popup-kml-export-btn {
+  width: calc(100% - 28px);
+  min-height: 34px;
+  margin: 0 14px 14px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 10px;
+  background: rgba(56, 189, 248, 0.12);
+  color: #d8f1ff;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.popup-kml-export-btn:hover {
+  border-color: rgba(56, 189, 248, 0.48);
+  background: rgba(56, 189, 248, 0.2);
+  color: #ffffff;
 }
 
 @media (max-width: 768px) {
@@ -6776,7 +6842,16 @@ input:focus-visible,
   background: rgba(15, 31, 56, 0.56);
 }
 
-.gleba-visibility-toggle {
+.gleba-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  border-left: 0;
+}
+
+.gleba-visibility-toggle,
+.gleba-delete-toggle {
   width: 36px;
   height: 36px;
   border: 1px solid rgba(103, 199, 255, 0.16);
@@ -6791,7 +6866,8 @@ input:focus-visible,
     0 8px 18px rgba(0, 0, 0, 0.15);
 }
 
-.gleba-visibility-toggle svg {
+.gleba-visibility-toggle svg,
+.gleba-delete-toggle svg {
   width: 16px;
   height: 16px;
 }
@@ -6800,6 +6876,22 @@ input:focus-visible,
   color: #cbd5e1;
   border-color: rgba(148, 163, 184, 0.2);
   background: rgba(15, 23, 42, 0.72);
+}
+
+.gleba-delete-toggle {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.22);
+  background:
+    linear-gradient(180deg, rgba(248, 113, 113, 0.1), rgba(248, 113, 113, 0.035)),
+    rgba(255, 255, 255, 0.03);
+}
+
+.gleba-delete-toggle:hover {
+  border-color: rgba(248, 113, 113, 0.36);
+  background:
+    linear-gradient(180deg, rgba(248, 113, 113, 0.16), rgba(248, 113, 113, 0.06)),
+    rgba(255, 255, 255, 0.04);
+  color: #fee2e2;
 }
 
 .gleba-accordion-card.is-hidden-map .gleba-accordion-name,
@@ -7854,7 +7946,12 @@ input:focus-visible,
     font-size: 10.5px;
   }
 
-  .gleba-visibility-toggle {
+  .gleba-card-actions {
+    gap: 5px;
+  }
+
+  .gleba-visibility-toggle,
+  .gleba-delete-toggle {
     width: 32px;
     height: 32px;
     flex-basis: 32px;

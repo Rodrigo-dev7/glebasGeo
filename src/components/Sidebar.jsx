@@ -68,6 +68,8 @@ export default function Sidebar({
   validationResult,
   validateCoordinate,
   exportReport,
+  exportGlebaKml,
+  removeGleba,
   sidebarCollapsed = false,
   onSidebarCollapsedChange,
   isMobile = false,
@@ -294,6 +296,7 @@ export default function Sidebar({
               setSelectedGleba={setSelectedGleba}
               hiddenFeatureIds={hiddenFeatureIds}
               onVisibilityToggle={toggleGlebaVisibility}
+              onRemoveGleba={removeGleba}
               activeVertexReference={activeVertexReference}
               onActiveVertexChange={onActiveVertexChange}
               emptyMessage={
@@ -317,6 +320,7 @@ export default function Sidebar({
                     : null
                 }
                 onActiveVertexChange={onActiveVertexChange}
+                onExportKml={exportGlebaKml}
                 onClose={() => {
                   setSelectedGleba(null)
                 }}
