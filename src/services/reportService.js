@@ -114,6 +114,93 @@ function buildCritiqueEntries(features = []) {
   })
 }
 
+function getFeatureCoordinateRows(feature) {
+  const properties = feature.properties || {}
+  const coordinateStatuses = properties.coordinateStatuses || []
+
+  if (coordinateStatuses.length) {
+    return coordinateStatuses.map((coordinate, index) => ({
+      ponto: coordinate.index ?? index + 1,
+      latitude: coordinate.lat,
+      longitude: coordinate.lon,
+      status: coordinate.isValid === false ? 'Invalido' : 'Valido',
+      observacao: (coordinate.issues || [])
+        .map((issue) => issue.message)
+        .filter(Boolean)
+        .join(' | ') || '-',
+    }))
+  }
+
+  const geometry = feature.geometry || {}
+  const geometryCoordinates =
+    geometry.type === 'MultiPolygon'
+      ? (geometry.coordinates || []).flatMap((polygon) => polygon?.[0] || [])
+      : geometry.coordinates?.[0] || []
+  const propertyCoordinates = properties.originalCoordinates?.length
+    ? properties.originalCoordinates
+    : properties.displayCoordinates?.length
+      ? properties.displayCoordinates
+      : null
+  const coordinates =
+    propertyCoordinates ||
+    geometryCoordinates ||
+    []
+
+  return coordinates.map(([lon, lat], index) => ({
+    ponto: index + 1,
+    latitude: lat,
+    longitude: lon,
+    status: '-',
+    observacao: '-',
+  }))
+}
+
+function buildGlebaPointRows(features = []) {
+  if (!features.length) {
+    return [{
+      'Sequencial da gleba': '-',
+      'ID da gleba': '-',
+      'Nome da gleba': 'Nenhuma gleba importada/adicionada',
+      'Ponto da gleba': '-',
+      Latitude: '-',
+      Longitude: '-',
+      'Status do ponto': '-',
+      Observacao: '-',
+    }]
+  }
+
+  const rows = features.flatMap((feature, featureIndex) => {
+    const properties = feature.properties || {}
+    const coordinateRows = getFeatureCoordinateRows(feature)
+
+    if (!coordinateRows.length) {
+      return [{
+        'Sequencial da gleba': featureIndex + 1,
+        'ID da gleba': properties.id || '-',
+        'Nome da gleba': properties.nome || `Gleba ${featureIndex + 1}`,
+        'Ponto da gleba': '-',
+        Latitude: '-',
+        Longitude: '-',
+        'Status do ponto': '-',
+        Observacao: 'Nenhuma coordenada encontrada para esta gleba',
+      }]
+    }
+
+    return coordinateRows.map((coordinate) => ({
+      'Sequencial da gleba': featureIndex + 1,
+      'ID da gleba': properties.id || '-',
+      'Nome da gleba': properties.nome || `Gleba ${featureIndex + 1}`,
+      'Ponto da gleba': coordinate.ponto,
+      Latitude: coordinate.latitude,
+      Longitude: coordinate.longitude,
+      'Status do ponto': coordinate.status,
+      Observacao: coordinate.observacao,
+    }))
+  })
+
+  return rows.length ? rows : buildGlebaPointRows([])
+}
+
 function buildValidationSummary(glebas = [], stats = null) {
   const total = glebas.length || stats?.total || 0
   const validas = glebas.filter((gleba) => gleba.status === 'valida').length || stats?.validas || 0
@@ -168,6 +255,7 @@ export function buildValidationReport({ dataset, carReferenceDataset, validation
     stats,
     validationSummary,
     glebas,
+    glebaPoints: buildGlebaPointRows(datasetFeatures),
     critiques: buildCritiqueEntries(datasetFeatures),
     validation: validationResult
       ? {
@@ -369,6 +457,14 @@ export async function downloadValidationReport(report, fileName = 'relatorio-val
     'Base Completa',
     buildGlebaRows(glebas, 'Nenhuma gleba importada'),
     [12, 12, 18, 28, 12, 18, 8, 18, 10, 18, 10, 10, 18, 20, 42]
+  )
+
+  appendJsonSheet(
+    XLSX,
+    workbook,
+    'Pontos das Glebas',
+    report.glebaPoints || buildGlebaPointRows([]),
+    [20, 18, 28, 16, 16, 16, 16, 60]
   )
 
   appendJsonSheet(
