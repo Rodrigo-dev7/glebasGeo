@@ -95,6 +95,7 @@ export default function CarConsultModal({
   onClear,
   onFocus,
   onFocusEnvironmental,
+  onExportKml,
   consultedCar = null,
   error = '',
   isLoading = false,
@@ -291,6 +292,14 @@ export default function CarConsultModal({
                     Mostrar reserva ambiental
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  className="car-consult-focus car-consult-focus--export"
+                  onClick={onExportKml}
+                >
+                  Exportar KML
+                </button>
 
                 <button
                   type="button"

@@ -64,6 +64,7 @@ export default function App() {
     queryPoint,
     exportReport,
     exportGlebaKml,
+    exportConsultedCarKml,
     matchedFeatureIds,
     visibleFeatureIds,
     hiddenFeatureIds,
@@ -238,6 +239,7 @@ export default function App() {
             pointDisplayMode={pointDisplayMode}
             consultedCar={consultedCar}
             onExportGlebaKml={exportGlebaKml}
+            onExportConsultedCarKml={exportConsultedCarKml}
           />
         </main>
 
@@ -287,6 +289,7 @@ export default function App() {
         onClear={clearConsultedCar}
         onFocus={focusConsultedCar}
         onFocusEnvironmental={focusConsultedEnvironmentalRestriction}
+        onExportKml={exportConsultedCarKml}
         consultedCar={consultedCar}
         error={carConsultationError}
         isLoading={isConsultingCar}

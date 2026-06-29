@@ -6593,6 +6593,18 @@ input:focus-visible,
   box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.12);
 }
 
+.car-consult-focus--export {
+  border-color: rgba(56, 189, 248, 0.36);
+  background: rgba(56, 189, 248, 0.12);
+  color: #d8f1ff;
+}
+
+.car-consult-focus--export:hover {
+  border-color: rgba(56, 189, 248, 0.54);
+  background: rgba(56, 189, 248, 0.2);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.14);
+}
+
 .car-consult-focus--environment {
   border-color: rgba(239, 68, 68, 0.34);
   background: rgba(239, 68, 68, 0.12);

@@ -1939,6 +1939,32 @@ function publicCarPopupMarkup(feature) {
   `
 }
 
+function createPublicCarPopupContent(feature, onExportKml = null) {
+  const container = document.createElement('div')
+  container.innerHTML = publicCarPopupMarkup(feature)
+  const content = container.firstElementChild || container
+
+  if (onExportKml) {
+    const exportButton = document.createElement('button')
+    exportButton.type = 'button'
+    exportButton.className = 'popup-kml-export-btn'
+    exportButton.textContent = 'Exportar KML'
+    exportButton.title = 'Exportar CAR consultado como arquivo KML'
+    exportButton.setAttribute('aria-label', 'Exportar CAR consultado como arquivo KML')
+
+    L.DomEvent.disableClickPropagation(exportButton)
+    L.DomEvent.on(exportButton, 'click', (event) => {
+      L.DomEvent.preventDefault(event)
+      L.DomEvent.stopPropagation(event)
+      onExportKml()
+    })
+
+    content.appendChild(exportButton)
+  }
+
+  return content
+}
+
 function environmentalRestrictionPopupMarkup(feature) {
   const properties = feature.properties || {}
   const location = [
@@ -3031,6 +3057,7 @@ function CarReferenceLayer({
 function PublicCarConsultationLayer({
   consultedCar,
   viewportRequest,
+  onExportKml,
 }) {
   const leafMap = useMap()
   const featureGroupRef = useRef(null)
@@ -3103,7 +3130,7 @@ function PublicCarConsultationLayer({
       pane: 'queried-car',
       style: (feature) => publicCarFeatureStyle(feature),
       onEachFeature: (feature, layer) => {
-        layer.bindPopup(publicCarPopupMarkup(feature), CAR_REFERENCE_POPUP_OPTIONS)
+        layer.bindPopup(createPublicCarPopupContent(feature, onExportKml), CAR_REFERENCE_POPUP_OPTIONS)
 
         layer.on({
           mouseover(event) {
@@ -3125,7 +3152,7 @@ function PublicCarConsultationLayer({
     })
 
     featureGroupRef.current.addLayer(publicCarLayer)
-  }, [consultedCar])
+  }, [consultedCar, onExportKml])
 
   useEffect(() => {
     const requestKey = viewportRequest?.requestKey
@@ -4269,6 +4296,7 @@ export default function MapView({
   pointDisplayMode = 'marked',
   consultedCar = null,
   onExportGlebaKml,
+  onExportConsultedCarKml,
 }) {
   const selectedId = selectedGleba?.properties?.id
   const [draggingFeatureId, setDraggingFeatureId] = useState(null)
@@ -4544,6 +4572,7 @@ export default function MapView({
         <PublicCarConsultationLayer
           consultedCar={consultedCar}
           viewportRequest={viewportRequest}
+          onExportKml={onExportConsultedCarKml}
         />
 
         <GeoJSONLayer
